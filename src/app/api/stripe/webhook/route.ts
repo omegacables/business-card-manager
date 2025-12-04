@@ -43,10 +43,18 @@ export async function POST(request: NextRequest) {
 
         // Get subscription details
         const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
-        const userId = subscription.metadata?.supabase_user_id;
+
+        // Find user by stripe_customer_id (more reliable than metadata)
+        const { data: existingSub } = await supabase
+          .from("subscriptions")
+          .select("user_id")
+          .eq("stripe_customer_id", customerId)
+          .single();
+
+        const userId = existingSub?.user_id || subscription.metadata?.supabase_user_id;
 
         if (userId) {
-          await (supabase as any)
+          await supabase
             .from("subscriptions")
             .update({
               plan: "pro",
@@ -68,13 +76,22 @@ export async function POST(request: NextRequest) {
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as any;
-        const userId = subscription.metadata?.supabase_user_id;
+        const customerId = subscription.customer as string;
+
+        // Find user by stripe_customer_id
+        const { data: subRecord } = await supabase
+          .from("subscriptions")
+          .select("user_id")
+          .eq("stripe_customer_id", customerId)
+          .single();
+
+        const userId = subRecord?.user_id || subscription.metadata?.supabase_user_id;
 
         if (userId) {
           const status = subscription.status === "active" ? "active" :
                         subscription.status === "past_due" ? "past_due" : "canceled";
 
-          await (supabase as any)
+          await supabase
             .from("subscriptions")
             .update({
               status,
@@ -94,10 +111,19 @@ export async function POST(request: NextRequest) {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as any;
-        const userId = subscription.metadata?.supabase_user_id;
+        const customerId = subscription.customer as string;
+
+        // Find user by stripe_customer_id
+        const { data: subRecord } = await supabase
+          .from("subscriptions")
+          .select("user_id")
+          .eq("stripe_customer_id", customerId)
+          .single();
+
+        const userId = subRecord?.user_id || subscription.metadata?.supabase_user_id;
 
         if (userId) {
-          await (supabase as any)
+          await supabase
             .from("subscriptions")
             .update({
               plan: "free",
@@ -115,21 +141,23 @@ export async function POST(request: NextRequest) {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as any;
-        const subscriptionId = invoice.subscription as string;
+        const customerId = invoice.customer as string;
 
-        if (subscriptionId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
-          const userId = subscription.metadata?.supabase_user_id;
+        // Find user by stripe_customer_id
+        const { data: subRecord } = await supabase
+          .from("subscriptions")
+          .select("user_id")
+          .eq("stripe_customer_id", customerId)
+          .single();
 
-          if (userId) {
-            await (supabase as any)
-              .from("subscriptions")
-              .update({
-                status: "past_due",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("user_id", userId);
-          }
+        if (subRecord?.user_id) {
+          await supabase
+            .from("subscriptions")
+            .update({
+              status: "past_due",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", subRecord.user_id);
         }
         break;
       }

@@ -10,7 +10,10 @@
       "mcp__stripe__list_products",
       "mcp__stripe__list_prices",
       "mcp__stripe__create_product",
-      "mcp__stripe__create_price"
+      "mcp__stripe__create_price",
+      "mcp__stripe__list_subscriptions",
+      "mcp__stripe__list_customers",
+      "mcp__stripe__fetch_stripe_resources"
     ],
     "deny": [],
     "ask": []
