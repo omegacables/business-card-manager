@@ -31,12 +31,19 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
+  const errorDescription = searchParams.get("error_description");
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
 
+  console.log("[LINE Callback] Received callback");
+  console.log("[LINE Callback] Code:", code ? "present" : "missing");
+  console.log("[LINE Callback] State:", state ? "present" : "missing");
+  console.log("[LINE Callback] Error:", error);
+  console.log("[LINE Callback] Error Description:", errorDescription);
+
   // Handle errors from LINE
   if (error) {
-    console.error("LINE OAuth error:", error);
+    console.error("[LINE Callback] OAuth error:", error, errorDescription);
     return NextResponse.redirect(`${siteUrl}login?error=line_auth_failed`);
   }
 
@@ -44,8 +51,11 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const storedState = cookieStore.get("line_oauth_state")?.value;
 
+  console.log("[LINE Callback] Stored state:", storedState ? "present" : "missing");
+  console.log("[LINE Callback] State match:", state === storedState);
+
   if (!state || state !== storedState) {
-    console.error("State mismatch");
+    console.error("[LINE Callback] State mismatch - received:", state, "stored:", storedState);
     return NextResponse.redirect(`${siteUrl}login?error=invalid_state`);
   }
 

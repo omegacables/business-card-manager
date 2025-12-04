@@ -15,7 +15,10 @@
       "mcp__stripe__list_customers",
       "mcp__stripe__fetch_stripe_resources",
       "mcp__stripe__cancel_subscription",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []

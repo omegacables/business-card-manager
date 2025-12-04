@@ -29,6 +29,8 @@ function LoginForm() {
         profile_fetch_failed: "プロフィールの取得に失敗しました",
         user_creation_failed: "アカウントの作成に失敗しました",
         session_failed: "セッションの作成に失敗しました",
+        configuration_error: "LINE設定エラー（環境変数を確認）",
+        no_code: "認証コードがありません",
       };
       setError(errorMessages[errorParam] || "エラーが発生しました");
     }

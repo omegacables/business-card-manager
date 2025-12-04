@@ -4,7 +4,18 @@ import { cookies } from "next/headers";
 
 export async function GET() {
   const channelId = process.env.LINE_LOGIN_CHANNEL_ID;
-  const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}api/auth/line/callback`;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const redirectUri = `${siteUrl}api/auth/line/callback`;
+
+  console.log("[LINE Auth] Starting OAuth flow");
+  console.log("[LINE Auth] Channel ID:", channelId ? "SET" : "NOT SET");
+  console.log("[LINE Auth] Site URL:", siteUrl);
+  console.log("[LINE Auth] Redirect URI:", redirectUri);
+
+  if (!channelId) {
+    console.error("[LINE Auth] LINE_LOGIN_CHANNEL_ID is not set");
+    return NextResponse.redirect(`${siteUrl}login?error=configuration_error`);
+  }
 
   // Generate state for CSRF protection
   const state = randomBytes(16).toString("hex");
