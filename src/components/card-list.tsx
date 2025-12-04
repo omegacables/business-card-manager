@@ -44,7 +44,7 @@ export function CardList({ cards }: { cards: BusinessCard[] }) {
               <TableCell className="hidden lg:table-cell">{card.email || "-"}</TableCell>
               <TableCell className="hidden sm:table-cell">{card.phone || card.mobile || "-"}</TableCell>
               <TableCell className="hidden md:table-cell">
-                {new Date(card.created_at).toLocaleDateString("ja-JP")}
+                {new Date(card.created_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}
               </TableCell>
             </TableRow>
           ))}

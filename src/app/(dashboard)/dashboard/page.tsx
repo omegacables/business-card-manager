@@ -70,7 +70,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {new Date(card.created_at).toLocaleDateString("ja-JP")}
+                      {new Date(card.created_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}
                     </span>
                   </Link>
                 </li>

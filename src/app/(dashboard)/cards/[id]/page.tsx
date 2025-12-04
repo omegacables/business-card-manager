@@ -130,8 +130,8 @@ export default async function CardDetailPage({
       </div>
 
       <div className="text-sm text-muted-foreground">
-        <p>登録日: {new Date(card.created_at).toLocaleString("ja-JP")}</p>
-        <p>更新日: {new Date(card.updated_at).toLocaleString("ja-JP")}</p>
+        <p>登録日: {new Date(card.created_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</p>
+        <p>更新日: {new Date(card.updated_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</p>
       </div>
     </div>
   );

@@ -33,7 +33,7 @@ export default async function PricingPage({
         <div className="p-4 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded-lg">
           <p className="font-medium">サブスクリプションのキャンセルが予定されています</p>
           <p className="text-sm mt-1">
-            {new Date(periodEnd).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}
+            {new Date(periodEnd).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" })}
             まではプロプランをご利用いただけます。その後、無料プランに移行します。
           </p>
         </div>
