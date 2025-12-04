@@ -39,6 +39,14 @@ export const quickReplyButtons: QuickReply = {
       type: "action",
       action: {
         type: "message",
+        label: "🔍 検索",
+        text: "検索 ",
+      },
+    },
+    {
+      type: "action",
+      action: {
+        type: "message",
         label: "🆔 ID取得",
         text: "id",
       },
@@ -308,4 +316,239 @@ export function isTextMessage(
     "message" in event &&
     event.message.type === "text"
   );
+}
+
+// Business card type for search results
+export interface BusinessCardResult {
+  id: string;
+  name: string;
+  company_name: string | null;
+  department: string | null;
+  position: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+}
+
+// Create search result message
+export function createSearchResultMessage(
+  cards: BusinessCardResult[],
+  query: string,
+  siteUrl?: string
+): FlexMessage {
+  if (cards.length === 0) {
+    return {
+      type: "flex",
+      altText: "検索結果: 該当なし",
+      contents: {
+        type: "bubble",
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            {
+              type: "text",
+              text: "検索結果",
+              weight: "bold",
+              size: "lg",
+            },
+            {
+              type: "text",
+              text: `「${query}」に該当する名刺は見つかりませんでした。`,
+              wrap: true,
+              size: "sm",
+              color: "#888888",
+              margin: "md",
+            },
+          ],
+        },
+      },
+      quickReply: quickReplyButtons,
+    };
+  }
+
+  // Show up to 5 results in carousel
+  const bubbles = cards.slice(0, 5).map((card) => ({
+    type: "bubble" as const,
+    size: "kilo" as const,
+    header: {
+      type: "box" as const,
+      layout: "vertical" as const,
+      contents: [
+        {
+          type: "text" as const,
+          text: card.name,
+          weight: "bold" as const,
+          size: "lg" as const,
+          wrap: true,
+        },
+        ...(card.company_name
+          ? [
+              {
+                type: "text" as const,
+                text: card.company_name,
+                size: "sm" as const,
+                color: "#888888",
+                wrap: true,
+              },
+            ]
+          : []),
+      ],
+      paddingAll: "12px",
+      backgroundColor: "#F8F9FA",
+    },
+    body: {
+      type: "box" as const,
+      layout: "vertical" as const,
+      contents: [
+        ...(card.position
+          ? [
+              {
+                type: "box" as const,
+                layout: "horizontal" as const,
+                contents: [
+                  {
+                    type: "text" as const,
+                    text: "役職",
+                    size: "xs" as const,
+                    color: "#888888",
+                    flex: 0,
+                  },
+                  {
+                    type: "text" as const,
+                    text: card.position,
+                    size: "sm" as const,
+                    wrap: true,
+                    margin: "md" as const,
+                  },
+                ],
+              },
+            ]
+          : []),
+        ...(card.phone
+          ? [
+              {
+                type: "box" as const,
+                layout: "horizontal" as const,
+                contents: [
+                  {
+                    type: "text" as const,
+                    text: "TEL",
+                    size: "xs" as const,
+                    color: "#888888",
+                    flex: 0,
+                  },
+                  {
+                    type: "text" as const,
+                    text: card.phone,
+                    size: "sm" as const,
+                    margin: "md" as const,
+                  },
+                ],
+                margin: "sm" as const,
+              },
+            ]
+          : []),
+        ...(card.mobile
+          ? [
+              {
+                type: "box" as const,
+                layout: "horizontal" as const,
+                contents: [
+                  {
+                    type: "text" as const,
+                    text: "携帯",
+                    size: "xs" as const,
+                    color: "#888888",
+                    flex: 0,
+                  },
+                  {
+                    type: "text" as const,
+                    text: card.mobile,
+                    size: "sm" as const,
+                    margin: "md" as const,
+                  },
+                ],
+                margin: "sm" as const,
+              },
+            ]
+          : []),
+        ...(card.email
+          ? [
+              {
+                type: "box" as const,
+                layout: "horizontal" as const,
+                contents: [
+                  {
+                    type: "text" as const,
+                    text: "Email",
+                    size: "xs" as const,
+                    color: "#888888",
+                    flex: 0,
+                  },
+                  {
+                    type: "text" as const,
+                    text: card.email,
+                    size: "xs" as const,
+                    wrap: true,
+                    margin: "md" as const,
+                  },
+                ],
+                margin: "sm" as const,
+              },
+            ]
+          : []),
+      ],
+      paddingAll: "12px",
+      spacing: "sm",
+    },
+    footer: {
+      type: "box" as const,
+      layout: "horizontal" as const,
+      spacing: "sm" as const,
+      contents: [
+        ...(card.phone
+          ? [
+              {
+                type: "button" as const,
+                style: "primary" as const,
+                height: "sm" as const,
+                action: {
+                  type: "uri" as const,
+                  label: "電話",
+                  uri: `tel:${card.phone.replace(/[-\s]/g, "")}`,
+                },
+                flex: 1,
+              },
+            ]
+          : []),
+        ...(card.email
+          ? [
+              {
+                type: "button" as const,
+                style: "secondary" as const,
+                height: "sm" as const,
+                action: {
+                  type: "uri" as const,
+                  label: "メール",
+                  uri: `mailto:${card.email}`,
+                },
+                flex: 1,
+              },
+            ]
+          : []),
+      ],
+      paddingAll: "12px",
+    },
+  }));
+
+  return {
+    type: "flex",
+    altText: `検索結果: ${cards.length}件`,
+    contents: {
+      type: "carousel",
+      contents: bubbles,
+    },
+    quickReply: quickReplyButtons,
+  };
 }

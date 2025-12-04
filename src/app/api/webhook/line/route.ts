@@ -9,6 +9,8 @@ import {
   isTextMessage,
   quickReplyButtons,
   createWelcomeMessage,
+  createSearchResultMessage,
+  BusinessCardResult,
 } from "@/lib/line";
 import { performOCR, parseBusinessCardText } from "@/lib/ocr";
 import type { Database } from "@/types/database";
@@ -198,7 +200,8 @@ async function handleTextMessage(
     source: { userId?: string };
   }
 ): Promise<void> {
-  const text = event.message.text.toLowerCase();
+  const originalText = event.message.text;
+  const text = originalText.toLowerCase();
   const lineUserId = event.source.userId;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
@@ -223,12 +226,88 @@ async function handleTextMessage(
     return;
   }
 
-  // Default response
+  // Search command: "検索 キーワード" or "@キーワード"
+  const searchMatch = originalText.match(/^(?:検索\s*|@)(.+)$/);
+  if (searchMatch) {
+    await handleSearch(event.replyToken, lineUserId, searchMatch[1].trim());
+    return;
+  }
+
+  // Default response with search hint
   await replyMessage(event.replyToken, [
     {
       type: "text",
-      text: "名刺の画像を送信してください。\n「ヘルプ」と送信すると使い方を確認できます。",
+      text: "名刺の画像を送信するか、「検索 名前」で名刺を検索できます。\n\n例: 検索 田中\n例: @山田\n\n「ヘルプ」と送信すると使い方を確認できます。",
       quickReply: quickReplyButtons,
     },
   ]);
+}
+
+async function handleSearch(
+  replyToken: string,
+  lineUserId: string | undefined,
+  query: string
+): Promise<void> {
+  if (!lineUserId) {
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "ユーザー情報を取得できませんでした。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+    return;
+  }
+
+  const supabase = createAdminClient();
+
+  // Find user by LINE user ID
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("line_user_id", lineUserId)
+    .single();
+
+  if (profileError || !profile) {
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "LINEアカウントが連携されていません。\nWebサイトでLINE連携を設定してください。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+    return;
+  }
+
+  try {
+    // Search business cards by name, company, or other fields
+    const profileData = profile as { id: string };
+    const { data: cards, error: searchError } = await supabase
+      .from("business_cards")
+      .select("id, name, company_name, department, position, email, phone, mobile")
+      .eq("user_id", profileData.id)
+      .or(`name.ilike.%${query}%,company_name.ilike.%${query}%,department.ilike.%${query}%,position.ilike.%${query}%,email.ilike.%${query}%`)
+      .order("updated_at", { ascending: false })
+      .limit(10);
+
+    if (searchError) {
+      throw searchError;
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const searchResults = (cards || []) as BusinessCardResult[];
+
+    await replyMessage(replyToken, [
+      createSearchResultMessage(searchResults, query, siteUrl),
+    ]);
+  } catch (error) {
+    console.error("Search error:", error);
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "検索中にエラーが発生しました。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+  }
 }
