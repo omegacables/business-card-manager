@@ -7,6 +7,8 @@ import {
   getImageContent,
   isImageMessage,
   isTextMessage,
+  quickReplyButtons,
+  createWelcomeMessage,
 } from "@/lib/line";
 import { performOCR, parseBusinessCardText } from "@/lib/ocr";
 import type { Database } from "@/types/database";
@@ -45,7 +47,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
+function isFollowEvent(
+  event: WebhookEvent
+): event is WebhookEvent & {
+  type: "follow";
+  replyToken: string;
+  source: { userId?: string };
+} {
+  return event.type === "follow";
+}
+
 async function handleEvent(event: WebhookEvent): Promise<void> {
+  // Handle follow (friend added) event
+  if (isFollowEvent(event)) {
+    await handleFollowEvent(event);
+    return;
+  }
+
   // Handle image messages
   if (isImageMessage(event)) {
     await handleImageMessage(event);
@@ -57,6 +75,17 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
     await handleTextMessage(event);
     return;
   }
+}
+
+async function handleFollowEvent(
+  event: WebhookEvent & {
+    type: "follow";
+    replyToken: string;
+    source: { userId?: string };
+  }
+): Promise<void> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  await replyMessage(event.replyToken, [createWelcomeMessage(siteUrl)]);
 }
 
 async function handleImageMessage(
@@ -145,7 +174,9 @@ async function handleImageMessage(
     if (parsed.phone) responseText += `TEL: ${parsed.phone}\n`;
     if (parsed.mobile) responseText += `携帯: ${parsed.mobile}\n`;
 
-    await replyMessage(event.replyToken, [{ type: "text", text: responseText }]);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: responseText, quickReply: quickReplyButtons },
+    ]);
   } catch (error) {
     console.error("Error processing image:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -153,6 +184,7 @@ async function handleImageMessage(
       {
         type: "text",
         text: `名刺の処理中にエラーが発生しました。\n\nエラー: ${errorMessage}`,
+        quickReply: quickReplyButtons,
       },
     ]);
   }
@@ -169,6 +201,8 @@ async function handleTextMessage(
   const text = event.message.text.toLowerCase();
   const lineUserId = event.source.userId;
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
   // Show LINE user ID for setup
   if (text === "id" || text === "myid") {
     await replyMessage(event.replyToken, [
@@ -177,31 +211,15 @@ async function handleTextMessage(
         text: lineUserId
           ? `あなたのLINEユーザーIDは:\n${lineUserId}\n\nこのIDをWebサイトの設定ページに登録してください。`
           : "ユーザーIDを取得できませんでした。",
+        quickReply: quickReplyButtons,
       },
     ]);
     return;
   }
 
-  if (text === "ヘルプ" || text === "help" || text === "？") {
-    await replyMessage(event.replyToken, [
-      {
-        type: "text",
-        text: `【名刺管理Bot ヘルプ】
-
-📷 名刺の登録
-→ 名刺の写真を送信してください
-
-🔍 名刺の検索
-→ Webサイトから検索できます
-
-💡 使い方
-1. 名刺の写真を撮影
-2. このチャットに送信
-3. 自動で読み取り・登録！
-
-※ 事前にWebサイトでLINE連携が必要です`,
-      },
-    ]);
+  // Show welcome/help message
+  if (text === "ヘルプ" || text === "help" || text === "？" || text === "メニュー" || text === "menu") {
+    await replyMessage(event.replyToken, [createWelcomeMessage(siteUrl)]);
     return;
   }
 
@@ -210,6 +228,7 @@ async function handleTextMessage(
     {
       type: "text",
       text: "名刺の画像を送信してください。\n「ヘルプ」と送信すると使い方を確認できます。",
+      quickReply: quickReplyButtons,
     },
   ]);
 }
