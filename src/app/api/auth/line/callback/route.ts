@@ -168,28 +168,31 @@ export async function GET(request: NextRequest) {
       console.log("[LINE Callback] Profile update error:", updateError?.message);
     }
 
-    // Create a session for the user
-    // Generate a magic link token and sign in
-    console.log("[LINE Callback] Generating magic link...");
-    const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
+    // Create a session for the user using the action_link from generateLink
+    console.log("[LINE Callback] Generating session link...");
+    const userEmail = `line_${profile.userId}@line.local`;
+
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "magiclink",
-      email: `line_${profile.userId}@line.local`,
+      email: userEmail,
     });
 
-    if (sessionError || !sessionData) {
-      console.error("[LINE Callback] Session creation failed:", sessionError);
+    if (linkError || !linkData) {
+      console.error("[LINE Callback] Link generation failed:", linkError);
       return NextResponse.redirect(`${siteUrl}login?error=session_failed`);
     }
 
-    console.log("[LINE Callback] Magic link generated, hashed_token:", !!sessionData.properties?.hashed_token);
+    console.log("[LINE Callback] Link generated, action_link present:", !!linkData.properties?.action_link);
 
-    // Redirect to the magic link which will set the session
-    const redirectUrl = sessionData.properties?.hashed_token
-      ? `${siteUrl}auth/callback?token_hash=${sessionData.properties.hashed_token}&type=magiclink`
-      : `${siteUrl}dashboard`;
+    // Use the action_link directly - it contains the proper verification URL
+    if (linkData.properties?.action_link) {
+      console.log("[LINE Callback] Redirecting to action_link");
+      return NextResponse.redirect(linkData.properties.action_link);
+    }
 
-    console.log("[LINE Callback] Redirecting to:", redirectUrl);
-    return NextResponse.redirect(redirectUrl);
+    // Fallback: redirect to login with error
+    console.error("[LINE Callback] No action_link in response");
+    return NextResponse.redirect(`${siteUrl}login?error=session_failed`);
   } catch (error) {
     console.error("[LINE Callback] Unexpected error:", error);
     return NextResponse.redirect(`${siteUrl}login?error=unknown_error`);
