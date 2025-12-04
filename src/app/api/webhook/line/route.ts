@@ -148,10 +148,11 @@ async function handleImageMessage(
     await replyMessage(event.replyToken, [{ type: "text", text: responseText }]);
   } catch (error) {
     console.error("Error processing image:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     await replyMessage(event.replyToken, [
       {
         type: "text",
-        text: "名刺の処理中にエラーが発生しました。\nしばらくしてからもう一度お試しください。",
+        text: `名刺の処理中にエラーが発生しました。\n\nエラー: ${errorMessage}`,
       },
     ]);
   }
