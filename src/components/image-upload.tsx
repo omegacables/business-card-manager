@@ -21,6 +21,7 @@ interface OCRResult {
     address: string | null;
     website: string | null;
   };
+  imageUrl: string | null;
 }
 
 interface ImageUploadProps {

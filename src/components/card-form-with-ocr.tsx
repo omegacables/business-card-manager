@@ -67,6 +67,7 @@ export function CardFormWithOCR() {
       address: string | null;
       website: string | null;
     };
+    imageUrl: string | null;
   }) => {
     setFormData((prev) => ({
       ...prev,
@@ -82,6 +83,7 @@ export function CardFormWithOCR() {
       postal_code: result.parsed.postal_code ?? prev.postal_code,
       address: result.parsed.address ?? prev.address,
       website: result.parsed.website ?? prev.website,
+      image_url: result.imageUrl ?? prev.image_url,
     }));
   };
 
@@ -256,7 +258,7 @@ export function CardFormWithOCR() {
           <CardContent>
             <textarea
               id="notes"
-              className="w-full min-h-[100px] p-3 border rounded-md resize-none"
+              className="w-full min-h-[100px] p-3 border border-border rounded-md resize-none bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               value={formData.notes}
               onChange={(e) => handleChange("notes", e.target.value)}
               placeholder="メモを入力..."

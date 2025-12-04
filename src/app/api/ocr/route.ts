@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
 
     // Convert file to base64
     const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString("base64");
+    const buffer = Buffer.from(bytes);
+    const base64 = buffer.toString("base64");
 
     // Perform OCR
     const ocrText = await performOCR(base64);
@@ -36,9 +37,30 @@ export async function POST(request: NextRequest) {
     // Parse the OCR text
     const parsedData = parseBusinessCardText(ocrText);
 
+    // Upload image to Supabase Storage
+    let imageUrl: string | null = null;
+    const fileName = `${user.id}/${Date.now()}.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("card-images")
+      .upload(fileName, buffer, {
+        contentType: file.type || "image/jpeg",
+        upsert: false,
+      });
+
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage
+        .from("card-images")
+        .getPublicUrl(fileName);
+      imageUrl = urlData.publicUrl;
+    } else {
+      console.error("Image upload error:", uploadError);
+    }
+
     return NextResponse.json({
       rawText: ocrText,
       parsed: parsedData,
+      imageUrl,
     });
   } catch (error) {
     console.error("OCR error:", error);

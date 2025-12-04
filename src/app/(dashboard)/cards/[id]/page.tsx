@@ -40,6 +40,25 @@ export default async function CardDetailPage({
         </div>
       </div>
 
+      {/* 名刺画像 */}
+      {card.image_url && (
+        <Card>
+          <CardHeader>
+            <CardTitle>名刺画像</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <a href={card.image_url} target="_blank" rel="noopener noreferrer">
+              <img
+                src={card.image_url}
+                alt={`${card.name}の名刺`}
+                className="max-w-full md:max-w-md rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
+              />
+            </a>
+            <p className="text-xs text-muted-foreground mt-2">クリックで拡大</p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>

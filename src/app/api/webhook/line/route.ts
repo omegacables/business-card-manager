@@ -144,8 +144,28 @@ async function handleImageMessage(
       return;
     }
 
+    // Upload image to Supabase Storage
+    const profileData = profile as { id: string };
+    const fileName = `${profileData.id}/${Date.now()}.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("card-images")
+      .upload(fileName, imageBuffer, {
+        contentType: "image/jpeg",
+        upsert: false,
+      });
+
+    let imageUrl: string | null = null;
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage
+        .from("card-images")
+        .getPublicUrl(fileName);
+      imageUrl = urlData.publicUrl;
+    } else {
+      console.error("Image upload error:", uploadError);
+    }
+
     // Save to database
-    const profileData = profile as any;
     const { error: insertError } = await (supabase as any).from("business_cards").insert({
       user_id: profileData.id,
       name: parsed.name,
@@ -160,6 +180,7 @@ async function handleImageMessage(
       postal_code: parsed.postal_code,
       address: parsed.address,
       website: parsed.website,
+      image_url: imageUrl,
     });
 
     if (insertError) {
