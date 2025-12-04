@@ -285,7 +285,7 @@ async function handleTextMessage(
       {
         type: "text",
         text: lineUserId
-          ? `あなたのLINEユーザーIDは:\n${lineUserId}\n\nこのIDをWebサイトの設定ページに登録してください。`
+          ? `あなたのユーザーIDは：\n${lineUserId}\n\n━━━━━━━━━━━━━━\n📝 LINE連携の設定手順\n━━━━━━━━━━━━━━\n\n① 上のユーザーIDを長押ししてコピー\n\n② 下記URLにアクセス\n${siteUrl}/settings\n\n③ 「LINE ユーザーID」欄にペースト\n\n④ 「保存」ボタンをタップ\n\n━━━━━━━━━━━━━━\n✅ 設定完了後、名刺の写真を送信すると自動で登録されます！`
           : "ユーザーIDを取得できませんでした。",
         quickReply: quickReplyButtons,
       },
