@@ -16,6 +16,8 @@ export default async function PricingPage({
   const currentPlan = subscription?.plan ?? "free";
   const cardsThisMonth = usage?.cards_registered ?? 0;
   const remaining = getRemainingCards(currentPlan, cardsThisMonth);
+  const cancelAtPeriodEnd = subscription?.cancel_at_period_end ?? false;
+  const periodEnd = subscription?.current_period_end;
 
   return (
     <div className="space-y-6">
@@ -25,6 +27,17 @@ export default async function PricingPage({
           現在のプラン: <span className="font-semibold text-foreground">{currentPlan === "pro" ? "プロ" : "無料"}</span>
         </p>
       </div>
+
+      {/* Cancellation notice */}
+      {cancelAtPeriodEnd && periodEnd && (
+        <div className="p-4 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded-lg">
+          <p className="font-medium">サブスクリプションのキャンセルが予定されています</p>
+          <p className="text-sm mt-1">
+            {new Date(periodEnd).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}
+            まではプロプランをご利用いただけます。その後、無料プランに移行します。
+          </p>
+        </div>
+      )}
 
       {/* Success/Cancel messages */}
       {params.success && (
@@ -161,9 +174,15 @@ export default async function PricingPage({
             )}
             {currentPlan === "pro" && (
               <div className="space-y-2">
-                <p className="text-center text-sm text-muted-foreground">
-                  ご利用いただきありがとうございます
-                </p>
+                {cancelAtPeriodEnd ? (
+                  <p className="text-center text-sm text-orange-600 dark:text-orange-400">
+                    キャンセル予定
+                  </p>
+                ) : (
+                  <p className="text-center text-sm text-muted-foreground">
+                    ご利用いただきありがとうございます
+                  </p>
+                )}
                 <PortalButton />
               </div>
             )}

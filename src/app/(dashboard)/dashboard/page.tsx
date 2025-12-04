@@ -2,9 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import type { BusinessCard } from "@/types/database";
+import { getUserSubscription } from "@/lib/subscription";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const subscription = await getUserSubscription();
 
   const { count: cardCount } = await supabase
     .from("business_cards")
@@ -17,10 +19,22 @@ export default async function DashboardPage() {
     .limit(5);
 
   const recentCards = (data || []) as BusinessCard[];
+  const isPro = subscription?.plan === "pro";
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">ダッシュボード</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-foreground">ダッシュボード</h1>
+        <Link href="/pricing">
+          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+            isPro
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground"
+          }`}>
+            {isPro ? "Pro" : "Free"}
+          </span>
+        </Link>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
