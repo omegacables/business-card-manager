@@ -19,6 +19,7 @@ const navigation = [
   { name: "名刺一覧", href: "/cards", icon: "📇" },
   { name: "新規登録", href: "/cards/new", icon: "➕" },
   { name: "設定", href: "/settings", icon: "⚙️" },
+  { name: "料金プラン", href: "/pricing", icon: "💎" },
 ];
 
 export function Sidebar({ user }: { user: User }) {

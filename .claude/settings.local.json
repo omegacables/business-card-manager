@@ -5,7 +5,12 @@
       "Bash(npx shadcn@latest init -d)",
       "Bash(npx shadcn@latest add button card input label form table dialog dropdown-menu avatar toast -y)",
       "Bash(npx shadcn@latest add:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "mcp__stripe__get_stripe_account_info",
+      "mcp__stripe__list_products",
+      "mcp__stripe__list_prices",
+      "mcp__stripe__create_product",
+      "mcp__stripe__create_price"
     ],
     "deny": [],
     "ask": []

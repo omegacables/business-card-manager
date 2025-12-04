@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
+import { checkCanRegisterCard, checkCanSaveImage } from "@/lib/subscription";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,15 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check registration limit
+    const { allowed, remaining, error: limitError } = await checkCanRegisterCard();
+    if (!allowed) {
+      return NextResponse.json(
+        { error: limitError, limitReached: true },
+        { status: 403 }
+      );
     }
 
     const formData = await request.formData();
@@ -37,30 +47,37 @@ export async function POST(request: NextRequest) {
     // Parse the OCR text with AI
     const parsedData = await parseBusinessCardWithAI(ocrText);
 
-    // Upload image to Supabase Storage
+    // Check if user can save images (Pro plan only)
+    const canSaveImages = await checkCanSaveImage();
     let imageUrl: string | null = null;
-    const fileName = `${user.id}/${Date.now()}.jpg`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("card-images")
-      .upload(fileName, buffer, {
-        contentType: file.type || "image/jpeg",
-        upsert: false,
-      });
+    if (canSaveImages) {
+      // Upload image to Supabase Storage
+      const fileName = `${user.id}/${Date.now()}.jpg`;
 
-    if (!uploadError) {
-      const { data: urlData } = supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("card-images")
-        .getPublicUrl(fileName);
-      imageUrl = urlData.publicUrl;
-    } else {
-      console.error("Image upload error:", uploadError);
+        .upload(fileName, buffer, {
+          contentType: file.type || "image/jpeg",
+          upsert: false,
+        });
+
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage
+          .from("card-images")
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      } else {
+        console.error("Image upload error:", uploadError);
+      }
     }
 
     return NextResponse.json({
       rawText: ocrText,
       parsed: parsedData,
       imageUrl,
+      remaining: remaining !== null ? remaining - 1 : null,
+      canSaveImages,
     });
   } catch (error) {
     console.error("OCR error:", error);

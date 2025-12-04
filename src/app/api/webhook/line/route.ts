@@ -126,6 +126,40 @@ async function handleImageMessage(
   }
 
   try {
+    const profileData = profile as { id: string };
+
+    // Check subscription and usage limits
+    const { data: subscription } = await (supabase as any)
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", profileData.id)
+      .single();
+
+    const plan = ((subscription as any)?.plan as "free" | "pro") || "free";
+    const yearMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+    // Get current month usage
+    const { data: usage } = await (supabase as any)
+      .from("monthly_usage")
+      .select("cards_registered")
+      .eq("user_id", profileData.id)
+      .eq("year_month", yearMonth)
+      .single();
+
+    const currentCount = (usage as any)?.cards_registered ?? 0;
+    const monthlyLimit = plan === "pro" ? null : 10;
+
+    if (monthlyLimit !== null && currentCount >= monthlyLimit) {
+      await replyMessage(event.replyToken, [
+        {
+          type: "text",
+          text: `今月の登録上限（${monthlyLimit}枚）に達しました。\n\nプロプランにアップグレードすると無制限に登録できます。\n設定ページからアップグレードしてください。`,
+          quickReply: quickReplyButtons,
+        },
+      ]);
+      return;
+    }
+
     // Get image content
     const imageBuffer = await getImageContent(event.message.id);
     const base64 = imageBuffer.toString("base64");
@@ -144,25 +178,26 @@ async function handleImageMessage(
       return;
     }
 
-    // Upload image to Supabase Storage
-    const profileData = profile as { id: string };
-    const fileName = `${profileData.id}/${Date.now()}.jpg`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("card-images")
-      .upload(fileName, imageBuffer, {
-        contentType: "image/jpeg",
-        upsert: false,
-      });
-
+    // Only save image for Pro users
     let imageUrl: string | null = null;
-    if (!uploadError) {
-      const { data: urlData } = supabase.storage
+    if (plan === "pro") {
+      const fileName = `${profileData.id}/${Date.now()}.jpg`;
+
+      const { error: uploadError } = await supabase.storage
         .from("card-images")
-        .getPublicUrl(fileName);
-      imageUrl = urlData.publicUrl;
-    } else {
-      console.error("Image upload error:", uploadError);
+        .upload(fileName, imageBuffer, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage
+          .from("card-images")
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      } else {
+        console.error("Image upload error:", uploadError);
+      }
     }
 
     // Save to database
@@ -187,7 +222,21 @@ async function handleImageMessage(
       throw insertError;
     }
 
+    // Increment usage count
+    await (supabase as any)
+      .from("monthly_usage")
+      .upsert(
+        {
+          user_id: profileData.id,
+          year_month: yearMonth,
+          cards_registered: currentCount + 1,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,year_month" }
+      );
+
     // Build response message
+    const remaining = monthlyLimit !== null ? monthlyLimit - currentCount - 1 : null;
     let responseText = `名刺を登録しました！\n\n`;
     responseText += `【登録内容】\n`;
     responseText += `氏名: ${parsed.name}\n`;
@@ -196,6 +245,9 @@ async function handleImageMessage(
     if (parsed.email) responseText += `Email: ${parsed.email}\n`;
     if (parsed.phone) responseText += `TEL: ${parsed.phone}\n`;
     if (parsed.mobile) responseText += `携帯: ${parsed.mobile}\n`;
+    if (remaining !== null) {
+      responseText += `\n今月の残り登録可能数: ${remaining}枚`;
+    }
 
     await replyMessage(event.replyToken, [
       { type: "text", text: responseText, quickReply: quickReplyButtons },

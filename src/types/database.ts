@@ -148,3 +148,29 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type BusinessCard = Database["public"]["Tables"]["business_cards"]["Row"];
 export type Tag = Database["public"]["Tables"]["tags"]["Row"];
 export type CardTag = Database["public"]["Tables"]["card_tags"]["Row"];
+
+export type Plan = "free" | "pro";
+export type SubscriptionStatus = "active" | "canceled" | "past_due";
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  plan: Plan;
+  status: SubscriptionStatus;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonthlyUsage {
+  id: string;
+  user_id: string;
+  year_month: string;
+  cards_registered: number;
+  created_at: string;
+  updated_at: string;
+}
