@@ -209,17 +209,32 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sign in the user with password
+    // Sign in the user with password using SSR client
     console.log("[LINE Callback] Signing in user...");
 
-    // Create a new Supabase client for the user session
-    const { createClient: createBrowserClient } = await import("@supabase/supabase-js");
-    const userSupabase = createBrowserClient(
+    const { createServerClient } = await import("@supabase/ssr");
+
+    // Prepare response for setting cookies
+    const response = NextResponse.redirect(`${siteUrl}dashboard`);
+
+    const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options);
+            });
+          },
+        },
+      }
     );
 
-    const { data: signInData, error: signInError } = await userSupabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabaseAuth.auth.signInWithPassword({
       email: userEmail,
       password: userPassword,
     });
@@ -229,29 +244,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${siteUrl}login?error=session_failed`);
     }
 
-    console.log("[LINE Callback] Sign in successful, setting cookies...");
-
-    // Set session cookies
-    const response = NextResponse.redirect(`${siteUrl}dashboard`);
-
-    // Set the Supabase auth cookies
-    response.cookies.set("sb-access-token", signInData.session.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: signInData.session.expires_in,
-      path: "/",
-    });
-
-    response.cookies.set("sb-refresh-token", signInData.session.refresh_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-      path: "/",
-    });
-
-    console.log("[LINE Callback] Redirecting to dashboard");
+    console.log("[LINE Callback] Sign in successful, redirecting to dashboard");
     return response;
   } catch (error) {
     console.error("[LINE Callback] Unexpected error:", error);
