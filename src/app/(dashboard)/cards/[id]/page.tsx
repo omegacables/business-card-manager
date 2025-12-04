@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteCardButton } from "@/components/delete-card-button";
 import { ExportVCardButton } from "@/components/export-buttons";
+import { getUserPlan } from "@/lib/subscription";
 import type { BusinessCard } from "@/types/database";
 
 export default async function CardDetailPage({
@@ -14,6 +15,7 @@ export default async function CardDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const plan = await getUserPlan();
 
   const { data, error } = await supabase
     .from("business_cards")
@@ -26,6 +28,7 @@ export default async function CardDetailPage({
   }
 
   const card = data as BusinessCard;
+  const canViewImage = plan === "pro";
 
   return (
     <div className="space-y-6">
@@ -47,14 +50,32 @@ export default async function CardDetailPage({
             <CardTitle>名刺画像</CardTitle>
           </CardHeader>
           <CardContent>
-            <a href={card.image_url} target="_blank" rel="noopener noreferrer">
-              <img
-                src={card.image_url}
-                alt={`${card.name}の名刺`}
-                className="max-w-full md:max-w-md rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
-              />
-            </a>
-            <p className="text-xs text-muted-foreground mt-2">クリックで拡大</p>
+            {canViewImage ? (
+              <>
+                <a href={card.image_url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={card.image_url}
+                    alt={`${card.name}の名刺`}
+                    className="max-w-full md:max-w-md rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
+                  />
+                </a>
+                <p className="text-xs text-muted-foreground mt-2">クリックで拡大</p>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 px-4 bg-muted/50 rounded-lg border border-dashed border-border">
+                <svg className="w-12 h-12 text-muted-foreground mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm text-muted-foreground text-center mb-3">
+                  名刺画像の表示はProプラン限定機能です
+                </p>
+                <Link href="/pricing">
+                  <Button size="sm" variant="outline">
+                    Proプランにアップグレード
+                  </Button>
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
