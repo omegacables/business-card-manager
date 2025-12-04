@@ -222,7 +222,30 @@ async function handleTextMessage(
 
   // Show welcome/help message
   if (text === "ヘルプ" || text === "help" || text === "？" || text === "メニュー" || text === "menu") {
-    await replyMessage(event.replyToken, [createWelcomeMessage(siteUrl)]);
+    try {
+      await replyMessage(event.replyToken, [createWelcomeMessage(siteUrl)]);
+    } catch (error) {
+      console.error("Help message error:", error);
+      // Fallback to simple text message
+      await replyMessage(event.replyToken, [
+        {
+          type: "text",
+          text: `【名刺管理Bot ヘルプ】
+
+📷 名刺の登録
+→ 名刺の写真を送信してください
+
+🔍 名刺の検索
+→ 「検索 名前」で検索できます
+
+🆔 LINE ID取得
+→ 「id」と送信してください
+
+※ 初回はWebサイトでLINE連携が必要です`,
+          quickReply: quickReplyButtons,
+        },
+      ]);
+    }
     return;
   }
 
