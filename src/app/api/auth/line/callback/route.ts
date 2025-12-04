@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 
 // Admin client to bypass RLS
 function createAdminClient() {
@@ -8,6 +9,14 @@ function createAdminClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+// Generate deterministic password for LINE users
+function generateLinePassword(lineUserId: string): string {
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createHash("sha256")
+    .update(`line_${lineUserId}_${secret}`)
+    .digest("hex");
 }
 
 interface LineTokenResponse {
@@ -133,21 +142,43 @@ export async function GET(request: NextRequest) {
 
     console.log("[LINE Callback] Existing profile:", existingProfile, "Error:", profileError?.message);
 
+    const userPassword = generateLinePassword(profile.userId);
+
     let userId: string;
+    let userEmail: string;
 
     if (existingProfile) {
-      // User exists, get their auth user
+      // User exists with this LINE ID - get their actual email
       userId = existingProfile.id;
       console.log("[LINE Callback] Existing user found:", userId);
+
+      // Get the user's actual email from auth.users
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+
+      if (userError || !userData.user) {
+        console.error("[LINE Callback] Failed to get user:", userError);
+        return NextResponse.redirect(`${siteUrl}login?error=user_creation_failed`);
+      }
+
+      userEmail = userData.user.email!;
+      console.log("[LINE Callback] User email:", userEmail);
+
+      // Update user's password to the deterministic one for LINE login
+      const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+        password: userPassword,
+      });
+
+      if (updateError) {
+        console.error("[LINE Callback] Password update failed:", updateError);
+      }
     } else {
-      // Create new user with LINE info
+      // Create new user with LINE info and deterministic password
       console.log("[LINE Callback] Creating new user...");
-      const email = `line_${profile.userId}@line.local`;
-      const password = `line_${profile.userId}_${Date.now()}_${Math.random().toString(36)}`;
+      userEmail = `line_${profile.userId}@line.local`;
 
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password,
+        email: userEmail,
+        password: userPassword,
         email_confirm: true,
         user_metadata: {
           display_name: profile.displayName,
@@ -173,34 +204,55 @@ export async function GET(request: NextRequest) {
         })
         .eq("id", userId);
 
-      console.log("[LINE Callback] Profile update error:", updateError?.message);
+      if (updateError) {
+        console.log("[LINE Callback] Profile update error:", updateError.message);
+      }
     }
 
-    // Create a session for the user using the action_link from generateLink
-    console.log("[LINE Callback] Generating session link...");
-    const userEmail = `line_${profile.userId}@line.local`;
+    // Sign in the user with password
+    console.log("[LINE Callback] Signing in user...");
 
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
+    // Create a new Supabase client for the user session
+    const { createClient: createBrowserClient } = await import("@supabase/supabase-js");
+    const userSupabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { data: signInData, error: signInError } = await userSupabase.auth.signInWithPassword({
       email: userEmail,
+      password: userPassword,
     });
 
-    if (linkError || !linkData) {
-      console.error("[LINE Callback] Link generation failed:", linkError);
+    if (signInError || !signInData.session) {
+      console.error("[LINE Callback] Sign in failed:", signInError);
       return NextResponse.redirect(`${siteUrl}login?error=session_failed`);
     }
 
-    console.log("[LINE Callback] Link generated, action_link present:", !!linkData.properties?.action_link);
+    console.log("[LINE Callback] Sign in successful, setting cookies...");
 
-    // Use the action_link directly - it contains the proper verification URL
-    if (linkData.properties?.action_link) {
-      console.log("[LINE Callback] Redirecting to action_link");
-      return NextResponse.redirect(linkData.properties.action_link);
-    }
+    // Set session cookies
+    const response = NextResponse.redirect(`${siteUrl}dashboard`);
 
-    // Fallback: redirect to login with error
-    console.error("[LINE Callback] No action_link in response");
-    return NextResponse.redirect(`${siteUrl}login?error=session_failed`);
+    // Set the Supabase auth cookies
+    response.cookies.set("sb-access-token", signInData.session.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: signInData.session.expires_in,
+      path: "/",
+    });
+
+    response.cookies.set("sb-refresh-token", signInData.session.refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      path: "/",
+    });
+
+    console.log("[LINE Callback] Redirecting to dashboard");
+    return response;
   } catch (error) {
     console.error("[LINE Callback] Unexpected error:", error);
     return NextResponse.redirect(`${siteUrl}login?error=unknown_error`);
