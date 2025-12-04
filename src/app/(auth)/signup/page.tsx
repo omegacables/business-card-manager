@@ -56,15 +56,15 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center text-green-600">
+            <CardTitle className="text-2xl font-bold text-center text-green-600 dark:text-green-400">
               登録完了
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-center text-gray-600">
+            <p className="text-center text-muted-foreground">
               確認メールを送信しました。メール内のリンクをクリックして登録を完了してください。
             </p>
           </CardContent>
@@ -83,7 +83,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">新規登録</CardTitle>
@@ -94,7 +94,7 @@ export default function SignupPage() {
         <form onSubmit={handleSignup}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
                 {error}
               </div>
             )}
@@ -135,9 +135,9 @@ export default function SignupPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "登録中..." : "登録"}
             </Button>
-            <p className="text-sm text-center text-gray-600">
+            <p className="text-sm text-center text-muted-foreground">
               すでにアカウントをお持ちの方は{" "}
-              <Link href="/login" className="text-blue-600 hover:underline">
+              <Link href="/login" className="text-primary hover:underline">
                 ログイン
               </Link>
             </p>

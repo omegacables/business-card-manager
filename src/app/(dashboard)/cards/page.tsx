@@ -29,12 +29,14 @@ export default async function CardsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">名刺一覧</h1>
-        <ExportCSVButton />
-        <Link href="/cards/new">
-          <Button>新規登録</Button>
-        </Link>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-foreground">名刺一覧</h1>
+        <div className="flex gap-2">
+          <ExportCSVButton />
+          <Link href="/cards/new">
+            <Button>新規登録</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
@@ -49,11 +51,11 @@ export default async function CardsPage({
           </form>
 
           {error ? (
-            <p className="text-red-500">エラーが発生しました</p>
+            <p className="text-destructive">エラーが発生しました</p>
           ) : cards && cards.length > 0 ? (
             <CardList cards={cards} />
           ) : (
-            <p className="text-gray-500 text-center py-8">
+            <p className="text-muted-foreground text-center py-8">
               {q ? "検索結果がありません" : "名刺がまだ登録されていません"}
             </p>
           )}

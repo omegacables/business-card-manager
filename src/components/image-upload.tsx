@@ -93,8 +93,8 @@ export function ImageUpload({ onOCRComplete }: ImageUploadProps) {
         <div
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
             dragActive
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 hover:border-gray-400"
+              ? "border-primary bg-primary/10"
+              : "border-border hover:border-primary/50"
           }`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -111,13 +111,13 @@ export function ImageUpload({ onOCRComplete }: ImageUploadProps) {
                 className="max-h-48 mx-auto rounded-md"
               />
               {loading && (
-                <p className="text-gray-500">読み取り中...</p>
+                <p className="text-muted-foreground">読み取り中...</p>
               )}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="text-4xl">📷</div>
-              <p className="text-gray-600">
+              <p className="text-muted-foreground">
                 名刺の画像をドラッグ＆ドロップ
                 <br />
                 または

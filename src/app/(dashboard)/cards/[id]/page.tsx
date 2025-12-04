@@ -29,9 +29,9 @@ export default async function CardDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{card.name}</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-foreground">{card.name}</h1>
+        <div className="flex flex-wrap gap-2">
           <ExportVCardButton cardId={id} />
           <Link href={'/cards/' + id + '/edit'}>
             <Button variant="outline">編集</Button>
@@ -83,13 +83,13 @@ export default async function CardDetailPage({
               <CardTitle>メモ</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-700 whitespace-pre-wrap">{card.notes}</p>
+              <p className="text-foreground whitespace-pre-wrap">{card.notes}</p>
             </CardContent>
           </Card>
         )}
       </div>
 
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-muted-foreground">
         <p>登録日: {new Date(card.created_at).toLocaleString("ja-JP")}</p>
         <p>更新日: {new Date(card.updated_at).toLocaleString("ja-JP")}</p>
       </div>
@@ -111,17 +111,17 @@ function InfoRow({
   if (!value) {
     return (
       <div className="flex justify-between">
-        <span className="text-gray-500">{label}</span>
-        <span className="text-gray-400">-</span>
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground/50">-</span>
       </div>
     );
   }
 
   return (
-    <div className="flex justify-between">
-      <span className="text-gray-500">{label}</span>
+    <div className="flex justify-between gap-4">
+      <span className="text-muted-foreground shrink-0">{label}</span>
       {isEmail ? (
-        <a href={'mailto:' + value} className="text-blue-600 hover:underline">
+        <a href={'mailto:' + value} className="text-primary hover:underline truncate">
           {value}
         </a>
       ) : isUrl ? (
@@ -129,12 +129,12 @@ function InfoRow({
           href={value}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-600 hover:underline"
+          className="text-primary hover:underline truncate"
         >
           {value}
         </a>
       ) : (
-        <span className="text-gray-900">{value}</span>
+        <span className="text-foreground truncate">{value}</span>
       )}
     </div>
   );

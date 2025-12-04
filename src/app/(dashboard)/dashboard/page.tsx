@@ -20,17 +20,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">ダッシュボード</h1>
+      <h1 className="text-2xl font-bold text-foreground">ダッシュボード</h1>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               登録済み名刺
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{cardCount ?? 0}</p>
+            <p className="text-3xl font-bold text-foreground">{cardCount ?? 0}</p>
           </CardContent>
         </Card>
       </div>
@@ -46,16 +46,16 @@ export default async function DashboardPage() {
                 <li key={card.id}>
                   <Link
                     href={'/cards/' + card.id}
-                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-accent transition-colors"
                   >
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{card.name}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-medium text-foreground">{card.name}</p>
+                      <p className="text-sm text-muted-foreground">
                         {card.company_name}
                         {card.position && ' - ' + card.position}
                       </p>
                     </div>
-                    <span className="text-sm text-gray-400">
+                    <span className="text-sm text-muted-foreground">
                       {new Date(card.created_at).toLocaleDateString("ja-JP")}
                     </span>
                   </Link>
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500 text-center py-8">
+            <p className="text-muted-foreground text-center py-8">
               名刺がまだ登録されていません
             </p>
           )}
