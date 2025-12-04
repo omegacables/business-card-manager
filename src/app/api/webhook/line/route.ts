@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WebhookEvent } from "@line/bot-sdk";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import {
   verifySignature,
   replyMessage,
@@ -12,27 +11,11 @@ import {
 import { performOCR, parseBusinessCardText } from "@/lib/ocr";
 import type { Database } from "@/types/database";
 
-async function createAdminClient() {
-  const cookieStore = await cookies();
-  return createServerClient<Database>(
+// Service role client to bypass RLS for webhook operations
+function createAdminClient() {
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Ignore
-          }
-        },
-      },
-    }
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
 
@@ -94,7 +77,7 @@ async function handleImageMessage(
   }
 
   // Find user by LINE user ID
-  const supabase = await createAdminClient();
+  const supabase = createAdminClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("id")
@@ -183,6 +166,20 @@ async function handleTextMessage(
   }
 ): Promise<void> {
   const text = event.message.text.toLowerCase();
+  const lineUserId = event.source.userId;
+
+  // Show LINE user ID for setup
+  if (text === "id" || text === "myid") {
+    await replyMessage(event.replyToken, [
+      {
+        type: "text",
+        text: lineUserId
+          ? `あなたのLINEユーザーIDは:\n${lineUserId}\n\nこのIDをWebサイトの設定ページに登録してください。`
+          : "ユーザーIDを取得できませんでした。",
+      },
+    ]);
+    return;
+  }
 
   if (text === "ヘルプ" || text === "help" || text === "？") {
     await replyMessage(event.replyToken, [
