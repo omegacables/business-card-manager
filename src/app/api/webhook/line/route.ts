@@ -12,7 +12,7 @@ import {
   createSearchResultMessage,
   BusinessCardResult,
 } from "@/lib/line";
-import { performOCR, parseBusinessCardText } from "@/lib/ocr";
+import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
 import type { Database } from "@/types/database";
 
 // Service role client to bypass RLS for webhook operations
@@ -130,9 +130,9 @@ async function handleImageMessage(
     const imageBuffer = await getImageContent(event.message.id);
     const base64 = imageBuffer.toString("base64");
 
-    // Perform OCR
+    // Perform OCR and AI analysis
     const ocrText = await performOCR(base64);
-    const parsed = parseBusinessCardText(ocrText);
+    const parsed = await parseBusinessCardWithAI(ocrText);
 
     if (!parsed.name) {
       await replyMessage(event.replyToken, [

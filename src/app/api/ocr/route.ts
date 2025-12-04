@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { performOCR, parseBusinessCardText } from "@/lib/ocr";
+import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse the OCR text
-    const parsedData = parseBusinessCardText(ocrText);
+    // Parse the OCR text with AI
+    const parsedData = await parseBusinessCardWithAI(ocrText);
 
     // Upload image to Supabase Storage
     let imageUrl: string | null = null;
