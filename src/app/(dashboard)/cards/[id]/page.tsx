@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteCardButton } from "@/components/delete-card-button";
@@ -8,19 +9,34 @@ import { ExportVCardButton } from "@/components/export-buttons";
 import { getUserPlan } from "@/lib/subscription";
 import type { BusinessCard } from "@/types/database";
 
+// Admin client to bypass RLS
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 export default async function CardDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await auth0.getSession();
+  if (!session) {
+    redirect("/login");
+  }
+
+  const userId = session.user.sub;
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const plan = await getUserPlan();
 
   const { data, error } = await supabase
     .from("business_cards")
     .select("*")
     .eq("id", id)
+    .eq("user_id", userId)
     .single();
 
   if (error || !data) {

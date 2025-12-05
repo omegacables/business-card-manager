@@ -1,20 +1,38 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import type { BusinessCard } from "@/types/database";
 import { getUserSubscription } from "@/lib/subscription";
+import { redirect } from "next/navigation";
+
+// Admin client to bypass RLS
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  const session = await auth0.getSession();
+  if (!session) {
+    redirect("/login");
+  }
+
+  const userId = session.user.sub;
+  const supabase = createAdminClient();
   const subscription = await getUserSubscription();
 
   const { count: cardCount } = await supabase
     .from("business_cards")
-    .select("*", { count: "exact", head: true });
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId);
 
   const { data } = await supabase
     .from("business_cards")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(5);
 
