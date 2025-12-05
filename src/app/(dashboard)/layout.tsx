@@ -12,18 +12,13 @@ export default async function DashboardLayout({
   const session = await auth0.getSession();
 
   if (!session) {
-    redirect("/login");
+    redirect("/");
   }
 
-  // メールがない場合はオンボーディングへ
-  if (!session.user.email) {
-    redirect("/onboarding");
-  }
-
-  // メールアドレスをユーザーIDとして使用
+  // ユーザー情報を構築（メールがない場合はsubを使用）
   const user = {
-    id: session.user.email,
-    email: session.user.email,
+    id: session.user.email || session.user.sub,
+    email: session.user.email || null,
     user_metadata: {
       full_name: session.user.name,
       avatar_url: session.user.picture,

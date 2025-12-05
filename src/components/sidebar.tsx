@@ -15,7 +15,7 @@ import {
 // Auth0互換のユーザー型
 interface AppUser {
   id: string;
-  email?: string;
+  email?: string | null;
   user_metadata?: {
     full_name?: string;
     avatar_url?: string;
@@ -112,10 +112,12 @@ export function Sidebar({ user }: { user: AppUser }) {
               <Button variant="ghost" className="w-full justify-start gap-3 px-3">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback>
-                    {user.email?.charAt(0).toUpperCase()}
+                    {(user.email || user.user_metadata?.full_name || "U")?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm truncate text-foreground">{user.email}</span>
+                <span className="text-sm truncate text-foreground">
+                  {user.email || user.user_metadata?.full_name || "ユーザー"}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
