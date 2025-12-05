@@ -23,7 +23,7 @@ function verifySignedState(state: string): { valid: boolean; userId: string | nu
 
     const { t, u, ts, n, s } = stateData;
     const payload = JSON.stringify({ t, u, ts, n });
-    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const secret = process.env.AUTH0_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const expectedSignature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
 
     // Check signature
@@ -149,17 +149,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${siteUrl}settings?error=line_already_linked`);
     }
 
-    // Update the user's profile with LINE ID
-    const { error: updateError } = await supabase
+    // Upsert the user's profile with LINE ID (create if not exists)
+    const { error: upsertError } = await supabase
       .from("profiles")
-      .update({
+      .upsert({
+        id: userId,
         line_user_id: profile.userId,
         display_name: profile.displayName,
-      })
-      .eq("id", userId);
+      }, {
+        onConflict: "id",
+      });
 
-    if (updateError) {
-      console.error("Profile update failed:", updateError);
+    if (upsertError) {
+      console.error("Profile upsert failed:", upsertError);
       return NextResponse.redirect(`${siteUrl}settings?error=update_failed`);
     }
 

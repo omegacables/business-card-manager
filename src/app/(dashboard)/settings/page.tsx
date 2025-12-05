@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const supabase = createClient();
   const { theme, setTheme } = useTheme();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [lineUserId, setLineUserId] = useState("");
   const [currentLineUserId, setCurrentLineUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,40 +51,39 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function fetchProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("line_user_id")
-          .eq("id", user.id)
-          .single();
-        if (data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const profile = data as any;
-          setCurrentLineUserId(profile.line_user_id);
-          setLineUserId(profile.line_user_id || "");
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          setUserId(data.user?.id);
+          if (data.profile?.line_user_id) {
+            setCurrentLineUserId(data.profile.line_user_id);
+            setLineUserId(data.profile.line_user_id);
+          }
         }
+      } catch (error) {
+        console.error("Failed to fetch profile:", error);
       }
     }
     fetchProfile();
-  }, [supabase]);
+  }, []);
 
   const handleSave = async () => {
+    if (!userId) {
+      toast.error("認証エラー");
+      return;
+    }
+
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("認証エラー");
-        return;
-      }
+      const res = await fetch("/api/profile/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line_user_id: lineUserId || null }),
+      });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from("profiles")
-        .update({ line_user_id: lineUserId || null })
-        .eq("id", user.id);
+      if (!res.ok) throw new Error("Update failed");
 
-      if (error) throw error;
       setCurrentLineUserId(lineUserId || null);
       toast.success("設定を保存しました");
     } catch (error) {
