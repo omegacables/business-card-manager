@@ -185,13 +185,15 @@ export async function GET(request: NextRequest) {
       userEmail = userData.user.email!;
       console.log("[LINE Callback] User email:", userEmail);
 
-      // Update user's password to the deterministic one for LINE login
-      const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-        password: userPassword,
-      });
+      // Only update password for LINE-created users (don't overwrite email users' passwords)
+      if (userEmail.endsWith("@line.local")) {
+        const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+          password: userPassword,
+        });
 
-      if (updateError) {
-        console.error("[LINE Callback] Password update failed:", updateError);
+        if (updateError) {
+          console.error("[LINE Callback] Password update failed:", updateError);
+        }
       }
     } else {
       // Create new user with LINE info and deterministic password
