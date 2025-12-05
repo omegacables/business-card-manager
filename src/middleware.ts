@@ -15,16 +15,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error("Auth0 middleware error:", error);
-    // Log environment variable status (not values)
-    console.error("ENV check:", {
+    // Log environment variable status for debugging
+    const envCheck = {
       hasSecret: !!process.env.AUTH0_SECRET,
+      secretLength: process.env.AUTH0_SECRET?.length || 0,
       hasBaseUrl: !!process.env.AUTH0_BASE_URL,
+      baseUrl: process.env.AUTH0_BASE_URL?.substring(0, 30) || "NOT SET",
       hasIssuerUrl: !!process.env.AUTH0_ISSUER_BASE_URL,
+      issuerUrl: process.env.AUTH0_ISSUER_BASE_URL?.substring(0, 30) || "NOT SET",
       hasClientId: !!process.env.AUTH0_CLIENT_ID,
+      clientIdLength: process.env.AUTH0_CLIENT_ID?.length || 0,
       hasClientSecret: !!process.env.AUTH0_CLIENT_SECRET,
-    });
+    };
+    console.error("ENV check:", envCheck);
     return NextResponse.json(
-      { error: "Authentication error", message: String(error) },
+      { error: "Authentication error", message: String(error), env: envCheck },
       { status: 500 }
     );
   }
