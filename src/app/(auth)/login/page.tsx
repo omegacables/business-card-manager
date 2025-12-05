@@ -24,13 +24,13 @@ function LoginForm() {
   const handleLineLogin = () => {
     setLineLoading(true);
     // Auth0経由でLINEログイン (v4: /auth/login instead of /api/auth/login)
-    window.location.href = "/auth/login?connection=line";
+    window.location.href = "/auth/login?connection=line&returnTo=/dashboard";
   };
 
   const handleGoogleLogin = () => {
     setGoogleLoading(true);
     // Auth0経由でGoogleログイン (v4: /auth/login instead of /api/auth/login)
-    window.location.href = "/auth/login?connection=google-oauth2";
+    window.location.href = "/auth/login?connection=google-oauth2&returnTo=/dashboard";
   };
 
   return (
