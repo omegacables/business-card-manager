@@ -43,19 +43,20 @@ export default async function DashboardPage() {
     redirect("/settings?setup=email");
   }
 
-  // プロフィールのemailをuser_idとして使用
-  const userId = profile.email;
+  // プロフィールのIDをuser_idとして使用（名刺はprofile.idで保存されている）
+  const userId = profile.id;
   const subscription = await getUserSubscription();
 
+  // profile.idまたはprofile.emailで検索（移行期間中の互換性のため）
   const { count: cardCount } = await supabase
     .from("business_cards")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .or(`user_id.eq.${userId},user_id.eq.${profile.email}`);
 
   const { data } = await supabase
     .from("business_cards")
     .select("*")
-    .eq("user_id", userId)
+    .or(`user_id.eq.${userId},user_id.eq.${profile.email}`)
     .order("created_at", { ascending: false })
     .limit(5);
 
