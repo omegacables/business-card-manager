@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import { createHash } from "crypto";
+import { createHash, createHmac } from "crypto";
 
 // Admin client to bypass RLS
 function createAdminClient() {
@@ -17,6 +17,43 @@ function generateLinePassword(lineUserId: string): string {
   return createHash("sha256")
     .update(`line_${lineUserId}_${secret}`)
     .digest("hex");
+}
+
+// Verify signed state token
+function verifySignedLoginState(state: string): boolean {
+  try {
+    const parts = state.split(".");
+    if (parts.length !== 4) {
+      return false;
+    }
+
+    const [prefix, timestamp, nonce, signature] = parts;
+    if (prefix !== "login") {
+      return false;
+    }
+
+    const payload = `${prefix}.${timestamp}.${nonce}`;
+    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const expectedSignature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
+
+    // Check signature
+    if (signature !== expectedSignature) {
+      console.error("[LINE Callback] Invalid signature");
+      return false;
+    }
+
+    // Check timestamp (10 minutes expiry)
+    const stateTime = parseInt(timestamp, 10);
+    const now = Date.now();
+    if (now - stateTime > 10 * 60 * 1000) {
+      console.error("[LINE Callback] State expired");
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 interface LineTokenResponse {
@@ -43,12 +80,12 @@ export async function GET(request: NextRequest) {
   const errorDescription = searchParams.get("error_description");
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
+  const cookieStore = await cookies();
 
   console.log("[LINE Callback] Received callback");
   console.log("[LINE Callback] Code:", code ? "present" : "missing");
   console.log("[LINE Callback] State:", state ? "present" : "missing");
   console.log("[LINE Callback] Error:", error);
-  console.log("[LINE Callback] Error Description:", errorDescription);
 
   // Handle errors from LINE
   if (error) {
@@ -56,28 +93,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${siteUrl}login?error=line_auth_failed`);
   }
 
-  // Verify state
-  const cookieStore = await cookies();
-  const storedState = cookieStore.get("line_oauth_state")?.value;
-
-  console.log("[LINE Callback] Stored state:", storedState ? "present" : "missing");
-  console.log("[LINE Callback] State match:", state === storedState);
-
-  // Note: State validation temporarily relaxed due to cookie issues in serverless environment
-  // TODO: Implement signed state tokens for better security
-  if (storedState && state !== storedState) {
-    console.error("[LINE Callback] State mismatch - received:", state, "stored:", storedState);
+  // Verify signed state token (no cookies needed!)
+  if (!state || !verifySignedLoginState(state)) {
+    console.error("[LINE Callback] Invalid or expired state");
     return NextResponse.redirect(`${siteUrl}login?error=invalid_state`);
   }
 
-  if (!storedState) {
-    console.warn("[LINE Callback] No stored state found - proceeding anyway (cookie issue)");
-  }
-
-  // Clear state cookie if it exists
-  if (storedState) {
-    cookieStore.delete("line_oauth_state");
-  }
+  console.log("[LINE Callback] State verified successfully");
 
   if (!code) {
     return NextResponse.redirect(`${siteUrl}login?error=no_code`);

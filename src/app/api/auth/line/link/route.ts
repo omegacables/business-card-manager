@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { cookies } from "next/headers";
+import { randomBytes, createHmac } from "crypto";
 import { createClient } from "@/lib/supabase/server";
+
+// Create signed state token (no cookies needed)
+function createSignedState(userId: string): string {
+  const nonce = randomBytes(16).toString("hex");
+  const timestamp = Date.now().toString();
+  const payload = `${userId}.${timestamp}.${nonce}`;
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const signature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
+  return `${payload}.${signature}`;
+}
 
 export async function GET() {
   // Check if user is logged in
@@ -15,17 +24,10 @@ export async function GET() {
   const channelId = process.env.LINE_LOGIN_CHANNEL_ID;
   const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}api/auth/line/link/callback`;
 
-  // Generate state for CSRF protection (include user id)
-  const state = `link_${user.id}_${randomBytes(16).toString("hex")}`;
+  // Generate signed state token (contains user id, timestamp, nonce, signature)
+  const state = createSignedState(user.id);
 
-  // Store state in cookie
-  const cookieStore = await cookies();
-  cookieStore.set("line_link_state", state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 10, // 10 minutes
-  });
+  console.log("[LINE Link] Starting OAuth flow for user:", user.id);
 
   // LINE OAuth authorization URL
   const authUrl = new URL("https://access.line.me/oauth2/v2.1/authorize");

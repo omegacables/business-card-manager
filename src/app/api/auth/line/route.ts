@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { cookies } from "next/headers";
+import { randomBytes, createHmac } from "crypto";
+
+// Create signed state token (no cookies needed for login flow)
+function createSignedLoginState(): string {
+  const nonce = randomBytes(16).toString("hex");
+  const timestamp = Date.now().toString();
+  const payload = `login.${timestamp}.${nonce}`;
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const signature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
+  return `${payload}.${signature}`;
+}
 
 export async function GET() {
   const channelId = process.env.LINE_LOGIN_CHANNEL_ID;
@@ -17,17 +26,8 @@ export async function GET() {
     return NextResponse.redirect(`${siteUrl}login?error=configuration_error`);
   }
 
-  // Generate state for CSRF protection
-  const state = randomBytes(16).toString("hex");
-
-  // Store state in cookie
-  const cookieStore = await cookies();
-  cookieStore.set("line_oauth_state", state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 10, // 10 minutes
-  });
+  // Generate signed state token (contains timestamp, nonce, signature)
+  const state = createSignedLoginState();
 
   // LINE OAuth authorization URL
   const authUrl = new URL("https://access.line.me/oauth2/v2.1/authorize");

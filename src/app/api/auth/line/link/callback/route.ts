@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { createHmac } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
 // Admin client to bypass RLS
@@ -8,6 +8,39 @@ function createAdminClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+// Verify signed state token
+function verifySignedState(state: string): { valid: boolean; userId: string | null } {
+  try {
+    const parts = state.split(".");
+    if (parts.length !== 4) {
+      return { valid: false, userId: null };
+    }
+
+    const [userId, timestamp, nonce, signature] = parts;
+    const payload = `${userId}.${timestamp}.${nonce}`;
+    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const expectedSignature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
+
+    // Check signature
+    if (signature !== expectedSignature) {
+      console.error("[LINE Link Callback] Invalid signature");
+      return { valid: false, userId: null };
+    }
+
+    // Check timestamp (10 minutes expiry)
+    const stateTime = parseInt(timestamp, 10);
+    const now = Date.now();
+    if (now - stateTime > 10 * 60 * 1000) {
+      console.error("[LINE Link Callback] State expired");
+      return { valid: false, userId: null };
+    }
+
+    return { valid: true, userId };
+  } catch {
+    return { valid: false, userId: null };
+  }
 }
 
 interface LineTokenResponse {
@@ -34,30 +67,27 @@ export async function GET(request: NextRequest) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
 
+  console.log("[LINE Link Callback] Received callback");
+
   // Handle errors from LINE
   if (error) {
-    console.error("LINE OAuth error:", error);
+    console.error("[LINE Link Callback] OAuth error:", error);
     return NextResponse.redirect(`${siteUrl}settings?error=line_auth_failed`);
   }
 
-  // Verify state
-  const cookieStore = await cookies();
-  const storedState = cookieStore.get("line_link_state")?.value;
-
-  if (!state || state !== storedState) {
-    console.error("State mismatch");
+  // Verify signed state (no cookies needed!)
+  if (!state) {
+    console.error("[LINE Link Callback] No state parameter");
     return NextResponse.redirect(`${siteUrl}settings?error=invalid_state`);
   }
 
-  // Extract user ID from state
-  const stateMatch = state.match(/^link_([^_]+)_/);
-  if (!stateMatch) {
+  const { valid, userId } = verifySignedState(state);
+  if (!valid || !userId) {
+    console.error("[LINE Link Callback] Invalid or expired state");
     return NextResponse.redirect(`${siteUrl}settings?error=invalid_state`);
   }
-  const userId = stateMatch[1];
 
-  // Clear state cookie
-  cookieStore.delete("line_link_state");
+  console.log("[LINE Link Callback] Verified user:", userId);
 
   if (!code) {
     return NextResponse.redirect(`${siteUrl}settings?error=no_code`);
