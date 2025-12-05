@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
 import { Sidebar } from "@/components/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -8,12 +8,22 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Auth0のセッションを確認
+  const session = await auth0.getSession();
 
-  if (!user) {
+  if (!session) {
     redirect("/login");
   }
+
+  // Auth0ユーザー情報をSupabase形式に変換
+  const user = {
+    id: session.user.sub,
+    email: session.user.email,
+    user_metadata: {
+      full_name: session.user.name,
+      avatar_url: session.user.picture,
+    },
+  };
 
   return (
     <div className="flex min-h-screen bg-background">

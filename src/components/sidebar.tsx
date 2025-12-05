@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -12,7 +11,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { User } from "@supabase/supabase-js";
+
+// Auth0互換のユーザー型
+interface AppUser {
+  id: string;
+  email?: string;
+  user_metadata?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+}
 
 const navigation = [
   { name: "ダッシュボード", href: "/dashboard", icon: "📊" },
@@ -22,16 +30,13 @@ const navigation = [
   { name: "サブスクリプション", href: "/pricing", icon: "💎" },
 ];
 
-export function Sidebar({ user }: { user: User }) {
+export function Sidebar({ user }: { user: AppUser }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+  const handleLogout = () => {
+    // Auth0のログアウトURLにリダイレクト
+    window.location.href = "/auth/logout";
   };
 
   const handleNavClick = () => {
