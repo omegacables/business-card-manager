@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { randomBytes, createHmac } from "crypto";
 
-// Create signed state token (no cookies needed for login flow)
+// Create signed state token (Base64 URL-safe encoded)
 function createSignedLoginState(): string {
   const nonce = randomBytes(16).toString("hex");
   const timestamp = Date.now().toString();
-  const payload = `login.${timestamp}.${nonce}`;
+  const data = { t: "login", ts: timestamp, n: nonce };
+  const payload = JSON.stringify(data);
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const signature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
-  return `${payload}.${signature}`;
+  const stateData = { ...data, s: signature };
+  // Base64 URL-safe encoding
+  return Buffer.from(JSON.stringify(stateData)).toString("base64url");
 }
 
 export async function GET() {

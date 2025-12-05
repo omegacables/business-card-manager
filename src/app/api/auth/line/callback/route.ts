@@ -19,31 +19,30 @@ function generateLinePassword(lineUserId: string): string {
     .digest("hex");
 }
 
-// Verify signed state token
+// Verify signed state token (Base64 URL-safe encoded)
 function verifySignedLoginState(state: string): boolean {
   try {
-    const parts = state.split(".");
-    if (parts.length !== 4) {
+    // Decode Base64 URL-safe
+    const decoded = Buffer.from(state, "base64url").toString("utf8");
+    const stateData = JSON.parse(decoded);
+
+    if (stateData.t !== "login") {
       return false;
     }
 
-    const [prefix, timestamp, nonce, signature] = parts;
-    if (prefix !== "login") {
-      return false;
-    }
-
-    const payload = `${prefix}.${timestamp}.${nonce}`;
+    const { t, ts, n, s } = stateData;
+    const payload = JSON.stringify({ t, ts, n });
     const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const expectedSignature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
 
     // Check signature
-    if (signature !== expectedSignature) {
+    if (s !== expectedSignature) {
       console.error("[LINE Callback] Invalid signature");
       return false;
     }
 
     // Check timestamp (10 minutes expiry)
-    const stateTime = parseInt(timestamp, 10);
+    const stateTime = parseInt(ts, 10);
     const now = Date.now();
     if (now - stateTime > 10 * 60 * 1000) {
       console.error("[LINE Callback] State expired");
@@ -51,7 +50,8 @@ function verifySignedLoginState(state: string): boolean {
     }
 
     return true;
-  } catch {
+  } catch (e) {
+    console.error("[LINE Callback] State verification error:", e);
     return false;
   }
 }

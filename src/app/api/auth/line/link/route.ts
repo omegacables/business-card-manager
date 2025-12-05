@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 import { randomBytes, createHmac } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 
-// Create signed state token (no cookies needed)
+// Create signed state token (Base64 URL-safe encoded)
 function createSignedState(userId: string): string {
   const nonce = randomBytes(16).toString("hex");
   const timestamp = Date.now().toString();
-  const payload = `${userId}.${timestamp}.${nonce}`;
+  const data = { t: "link", u: userId, ts: timestamp, n: nonce };
+  const payload = JSON.stringify(data);
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const signature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
-  return `${payload}.${signature}`;
+  const stateData = { ...data, s: signature };
+  return Buffer.from(JSON.stringify(stateData)).toString("base64url");
 }
 
 export async function GET() {

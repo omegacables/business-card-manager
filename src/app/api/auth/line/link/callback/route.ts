@@ -10,35 +10,39 @@ function createAdminClient() {
   );
 }
 
-// Verify signed state token
+// Verify signed state token (Base64 URL-safe encoded)
 function verifySignedState(state: string): { valid: boolean; userId: string | null } {
   try {
-    const parts = state.split(".");
-    if (parts.length !== 4) {
+    // Decode Base64 URL-safe
+    const decoded = Buffer.from(state, "base64url").toString("utf8");
+    const stateData = JSON.parse(decoded);
+
+    if (stateData.t !== "link") {
       return { valid: false, userId: null };
     }
 
-    const [userId, timestamp, nonce, signature] = parts;
-    const payload = `${userId}.${timestamp}.${nonce}`;
+    const { t, u, ts, n, s } = stateData;
+    const payload = JSON.stringify({ t, u, ts, n });
     const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const expectedSignature = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
 
     // Check signature
-    if (signature !== expectedSignature) {
+    if (s !== expectedSignature) {
       console.error("[LINE Link Callback] Invalid signature");
       return { valid: false, userId: null };
     }
 
     // Check timestamp (10 minutes expiry)
-    const stateTime = parseInt(timestamp, 10);
+    const stateTime = parseInt(ts, 10);
     const now = Date.now();
     if (now - stateTime > 10 * 60 * 1000) {
       console.error("[LINE Link Callback] State expired");
       return { valid: false, userId: null };
     }
 
-    return { valid: true, userId };
-  } catch {
+    return { valid: true, userId: u };
+  } catch (e) {
+    console.error("[LINE Link Callback] State verification error:", e);
     return { valid: false, userId: null };
   }
 }
