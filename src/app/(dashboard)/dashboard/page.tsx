@@ -8,24 +8,54 @@ import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const session = await auth0.getSession();
-  if (!session?.user?.email) {
-    redirect("/login");
+  if (!session) {
+    redirect("/");
   }
 
-  // メールアドレスをユーザーIDとして使用
-  const userEmail = session.user.email;
   const supabase = createAdminClient();
+
+  // プロフィールを取得（メールまたはLINE IDで）
+  const userEmail = session.user.email;
+  const lineUserId = session.user.sub?.startsWith("line|")
+    ? session.user.sub.replace("line|", "")
+    : null;
+
+  let profile = null;
+  if (userEmail) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("email", userEmail)
+      .single();
+    profile = data;
+  }
+  if (!profile && lineUserId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("line_user_id", lineUserId)
+      .single();
+    profile = data;
+  }
+
+  // プロフィールがない場合は設定ページへ
+  if (!profile) {
+    redirect("/settings?setup=email");
+  }
+
+  // プロフィールのemailをuser_idとして使用
+  const userId = profile.email;
   const subscription = await getUserSubscription();
 
   const { count: cardCount } = await supabase
     .from("business_cards")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", userEmail);
+    .eq("user_id", userId);
 
   const { data } = await supabase
     .from("business_cards")
     .select("*")
-    .eq("user_id", userEmail)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(5);
 
