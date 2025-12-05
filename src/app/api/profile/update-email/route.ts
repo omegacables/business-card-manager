@@ -44,40 +44,48 @@ export async function POST(request: NextRequest) {
     // Extract LINE user ID if this is a LINE user
     const lineUserId = authSub.startsWith("line|") ? authSub.replace("line|", "") : null;
 
-    // If email already exists
+    console.log("[UpdateEmail] LINE user ID:", lineUserId);
+    console.log("[UpdateEmail] Existing profile:", existingProfile);
+
+    // If email already exists in a profile
     if (existingProfile) {
-      // Check if it's the same user (by LINE ID or by current auth email)
-      const isSameUser =
-        (lineUserId && existingProfile.line_user_id === lineUserId) ||
-        (currentAuthEmail && existingProfile.email === currentAuthEmail);
+      // Case 1: This LINE user is already linked to this profile
+      if (lineUserId && existingProfile.line_user_id === lineUserId) {
+        console.log("[UpdateEmail] Already linked to this profile");
+        return NextResponse.json({ success: true, unchanged: true });
+      }
 
-      if (!isSameUser) {
-        // Check if this profile already has a LINE user linked
-        if (existingProfile.line_user_id && lineUserId && existingProfile.line_user_id !== lineUserId) {
-          return NextResponse.json({ error: "email_exists" }, { status: 409 });
-        }
-
-        // If the user is a LINE user and the profile doesn't have LINE linked, link them
-        if (lineUserId && !existingProfile.line_user_id) {
-          console.log("[UpdateEmail] Linking LINE to existing profile:", email);
-          const { error: updateError } = await supabase
-            .from("profiles")
-            .update({ line_user_id: lineUserId })
-            .eq("id", existingProfile.id);
-
-          if (updateError) {
-            console.error("[UpdateEmail] Link error:", JSON.stringify(updateError));
-            return NextResponse.json({ error: "Failed to link account" }, { status: 500 });
-          }
-
-          return NextResponse.json({ success: true, linked: true });
-        }
-
+      // Case 2: Profile has a different LINE user linked - reject
+      if (existingProfile.line_user_id && lineUserId && existingProfile.line_user_id !== lineUserId) {
+        console.log("[UpdateEmail] Profile has different LINE user linked");
         return NextResponse.json({ error: "email_exists" }, { status: 409 });
       }
 
-      // Same user, no change needed
-      return NextResponse.json({ success: true, unchanged: true });
+      // Case 3: Profile has no LINE linked and current user is LINE user - link them!
+      if (!existingProfile.line_user_id && lineUserId) {
+        console.log("[UpdateEmail] Linking LINE to existing profile:", email, "profile id:", existingProfile.id);
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ line_user_id: lineUserId })
+          .eq("id", existingProfile.id);
+
+        if (updateError) {
+          console.error("[UpdateEmail] Link error:", JSON.stringify(updateError));
+          return NextResponse.json({ error: "Failed to link account" }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true, linked: true });
+      }
+
+      // Case 4: Same email as auth email - no change needed
+      if (currentAuthEmail && existingProfile.email === currentAuthEmail) {
+        console.log("[UpdateEmail] Same as current auth email");
+        return NextResponse.json({ success: true, unchanged: true });
+      }
+
+      // Other cases - email is taken
+      console.log("[UpdateEmail] Email is taken by another user");
+      return NextResponse.json({ error: "email_exists" }, { status: 409 });
     }
 
     // Find current user's profile
