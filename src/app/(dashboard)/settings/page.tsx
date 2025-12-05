@@ -82,13 +82,17 @@ export default function SettingsPage() {
         body: JSON.stringify({ line_user_id: lineUserId || null }),
       });
 
-      if (!res.ok) throw new Error("Update failed");
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Update error:", errorData);
+        throw new Error(errorData.details || "Update failed");
+      }
 
       setCurrentLineUserId(lineUserId || null);
       toast.success("設定を保存しました");
     } catch (error) {
       console.error(error);
-      toast.error("保存に失敗しました");
+      toast.error(`保存に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setLoading(false);
     }
