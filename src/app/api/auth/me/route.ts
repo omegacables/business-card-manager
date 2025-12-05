@@ -11,8 +11,23 @@ export async function GET() {
     }
 
     const userEmail = session.user.email;
+    const userSub = session.user.sub;
+    const userName = session.user.name;
+    const userPicture = session.user.picture;
+
+    // If no email (e.g., LINE login), return user info without profile
+    // This allows the onboarding page to work
     if (!userEmail) {
-      return NextResponse.json({ error: "No email in session" }, { status: 400 });
+      return NextResponse.json({
+        user: {
+          id: null,
+          email: null,
+          sub: userSub,
+          name: userName,
+          picture: userPicture,
+        },
+        profile: null,
+      });
     }
 
     const supabase = createAdminClient();
@@ -31,7 +46,7 @@ export async function GET() {
         .insert({
           id: userEmail,
           email: userEmail,
-          display_name: session.user.name,
+          display_name: userName,
         })
         .select()
         .single();
@@ -39,7 +54,7 @@ export async function GET() {
       if (createError) {
         console.error("Failed to create profile:", createError);
         return NextResponse.json(
-          { user: { id: userEmail, email: userEmail }, profile: null },
+          { user: { id: userEmail, email: userEmail, sub: userSub, name: userName, picture: userPicture }, profile: null },
           { status: 200 }
         );
       }
@@ -48,8 +63,9 @@ export async function GET() {
         user: {
           id: userEmail,
           email: userEmail,
-          name: session.user.name,
-          picture: session.user.picture,
+          sub: userSub,
+          name: userName,
+          picture: userPicture,
         },
         profile: newProfile,
       });
@@ -59,8 +75,9 @@ export async function GET() {
       user: {
         id: userEmail,
         email: userEmail,
-        name: session.user.name,
-        picture: session.user.picture,
+        sub: userSub,
+        name: userName,
+        picture: userPicture,
       },
       profile,
     });

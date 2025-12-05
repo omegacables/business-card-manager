@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,54 +10,53 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default function OnboardingPage() {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [authSub, setAuthSub] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     async function checkUser() {
-      const { data: { user } } = await supabase.auth.getUser();
+      try {
+        // Fetch user info from Auth0 session
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) {
+          router.push("/login");
+          return;
+        }
 
-      if (!user) {
+        const data = await res.json();
+        const user = data.user;
+
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+
+        // Store Auth0 sub for later
+        setAuthSub(user.sub || null);
+
+        // If user already has email, redirect to dashboard
+        if (user.email) {
+          router.push("/dashboard");
+          return;
+        }
+
+        // Pre-fill display name from provider
+        if (user.name) {
+          setDisplayName(user.name);
+        }
+
+        setInitialLoading(false);
+      } catch (err) {
+        console.error("Error checking user:", err);
         router.push("/login");
-        return;
       }
-
-      // Pre-fill with data from OAuth provider if available
-      const providerEmail = user.email;
-      const providerName = user.user_metadata?.full_name ||
-                          user.user_metadata?.name ||
-                          user.user_metadata?.display_name || "";
-
-      // Check if profile is already complete
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile } = await (supabase as any)
-        .from("profiles")
-        .select("email, display_name")
-        .eq("id", user.id)
-        .single();
-
-      const profileData = profile as { email: string | null; display_name: string | null } | null;
-
-      if (profileData?.email && profileData?.display_name &&
-          !profileData.email.endsWith("@line.local")) {
-        // Profile already complete, redirect to dashboard
-        router.push("/dashboard");
-        return;
-      }
-
-      // Pre-fill the form
-      if (providerEmail && !providerEmail.endsWith("@line.local")) {
-        setEmail(providerEmail);
-      }
-      setDisplayName(providerName);
-      setInitialLoading(false);
     }
 
     checkUser();
-  }, [supabase, router]);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,33 +78,25 @@ export default function OnboardingPage() {
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      // Update profile
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from("profiles")
-        .update({
-          email: email,
+      // Create/update profile with the provided email
+      const res = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
           display_name: displayName,
-        })
-        .eq("id", user.id);
+        }),
+      });
 
-      if (updateError) {
-        console.error("Profile update error:", updateError);
-        setError("プロフィールの更新に失敗しました");
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.error === "email_exists") {
+          setError("このメールアドレスは既に使用されています。別のメールアドレスを入力するか、そのメールアドレスでログインしてください。");
+        } else {
+          setError(data.error || "プロフィールの設定に失敗しました");
+        }
         setLoading(false);
         return;
-      }
-
-      // Also update auth user email if different
-      if (user.email !== email) {
-        await supabase.auth.updateUser({ email: email });
       }
 
       router.push("/dashboard");
@@ -132,7 +122,7 @@ export default function OnboardingPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">プロフィール設定</CardTitle>
           <CardDescription className="text-center">
-            サービスを利用するために必要な情報を入力してください
+            LINEログインにはメールアドレスが含まれていないため、メールアドレスを入力してください
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -166,7 +156,7 @@ export default function OnboardingPage() {
                 required
               />
               <p className="text-xs text-muted-foreground">
-                通知やアカウント情報の送信に使用します
+                Googleアカウントと同じメールアドレスを入力すると、どちらでログインしても同じアカウントとして認識されます
               </p>
             </div>
 
