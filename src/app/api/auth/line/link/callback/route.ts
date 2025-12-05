@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
-import { createClient } from "@supabase/supabase-js";
-
-// Admin client to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { createAdminClient } from "@/lib/auth";
 
 // Verify signed state token (Base64 URL-safe encoded)
-function verifySignedState(state: string): { valid: boolean; userId: string | null } {
+// Returns userEmail instead of userId for email-based account linking
+function verifySignedState(state: string): { valid: boolean; userEmail: string | null } {
   try {
     // Decode Base64 URL-safe
     const decoded = Buffer.from(state, "base64url").toString("utf8");
     const stateData = JSON.parse(decoded);
 
     if (stateData.t !== "link") {
-      return { valid: false, userId: null };
+      return { valid: false, userEmail: null };
     }
 
     const { t, u, ts, n, s } = stateData;
@@ -29,7 +22,7 @@ function verifySignedState(state: string): { valid: boolean; userId: string | nu
     // Check signature
     if (s !== expectedSignature) {
       console.error("[LINE Link Callback] Invalid signature");
-      return { valid: false, userId: null };
+      return { valid: false, userEmail: null };
     }
 
     // Check timestamp (10 minutes expiry)
@@ -37,13 +30,13 @@ function verifySignedState(state: string): { valid: boolean; userId: string | nu
     const now = Date.now();
     if (now - stateTime > 10 * 60 * 1000) {
       console.error("[LINE Link Callback] State expired");
-      return { valid: false, userId: null };
+      return { valid: false, userEmail: null };
     }
 
-    return { valid: true, userId: u };
+    return { valid: true, userEmail: u };
   } catch (e) {
     console.error("[LINE Link Callback] State verification error:", e);
-    return { valid: false, userId: null };
+    return { valid: false, userEmail: null };
   }
 }
 
@@ -85,13 +78,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${siteUrl}settings?error=invalid_state`);
   }
 
-  const { valid, userId } = verifySignedState(state);
-  if (!valid || !userId) {
+  const { valid, userEmail } = verifySignedState(state);
+  if (!valid || !userEmail) {
     console.error("[LINE Link Callback] Invalid or expired state");
     return NextResponse.redirect(`${siteUrl}settings?error=invalid_state`);
   }
 
-  console.log("[LINE Link Callback] Verified user:", userId);
+  console.log("[LINE Link Callback] Verified user email:", userEmail);
 
   if (!code) {
     return NextResponse.redirect(`${siteUrl}settings?error=no_code`);
@@ -145,7 +138,7 @@ export async function GET(request: NextRequest) {
       .eq("line_user_id", profile.userId)
       .single();
 
-    if (existingProfile && existingProfile.id !== userId) {
+    if (existingProfile && existingProfile.id !== userEmail) {
       return NextResponse.redirect(`${siteUrl}settings?error=line_already_linked`);
     }
 
@@ -153,7 +146,8 @@ export async function GET(request: NextRequest) {
     const { error: upsertError } = await supabase
       .from("profiles")
       .upsert({
-        id: userId,
+        id: userEmail,
+        email: userEmail,
         line_user_id: profile.userId,
         display_name: profile.displayName,
       }, {

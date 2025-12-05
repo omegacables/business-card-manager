@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,17 +23,18 @@ export function DeleteCardButton({ cardId, cardName }: DeleteCardButtonProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleDelete = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("business_cards")
-        .delete()
-        .eq("id", cardId);
+      const res = await fetch(`/api/cards/${cardId}`, {
+        method: "DELETE",
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete card");
+      }
 
       toast.success("名刺を削除しました");
       router.push("/cards");

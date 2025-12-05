@@ -15,9 +15,14 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Auth0ユーザー情報をSupabase形式に変換
+  // メールがない場合はオンボーディングへ
+  if (!session.user.email) {
+    redirect("/onboarding");
+  }
+
+  // メールアドレスをユーザーIDとして使用
   const user = {
-    id: session.user.sub,
+    id: session.user.email,
     email: session.user.email,
     user_metadata: {
       full_name: session.user.name,

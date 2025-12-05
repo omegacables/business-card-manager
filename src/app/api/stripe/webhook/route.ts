@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/auth";
 import { getStripe, stripe } from "@/lib/stripe";
 import Stripe from "stripe";
-
-// Admin client to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -51,7 +43,7 @@ export async function POST(request: NextRequest) {
           .eq("stripe_customer_id", customerId)
           .single();
 
-        const userId = existingSub?.user_id || subscription.metadata?.supabase_user_id;
+        const userId = existingSub?.user_id || subscription.metadata?.user_email;
 
         if (userId) {
           await supabase
@@ -85,7 +77,7 @@ export async function POST(request: NextRequest) {
           .eq("stripe_customer_id", customerId)
           .single();
 
-        const userId = subRecord?.user_id || subscription.metadata?.supabase_user_id;
+        const userId = subRecord?.user_id || subscription.metadata?.user_email;
 
         if (userId) {
           const status = subscription.status === "active" ? "active" :
@@ -120,7 +112,7 @@ export async function POST(request: NextRequest) {
           .eq("stripe_customer_id", customerId)
           .single();
 
-        const userId = subRecord?.user_id || subscription.metadata?.supabase_user_id;
+        const userId = subRecord?.user_id || subscription.metadata?.user_email;
 
         if (userId) {
           await supabase

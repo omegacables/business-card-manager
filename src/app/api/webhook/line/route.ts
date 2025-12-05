@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WebhookEvent } from "@line/bot-sdk";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/auth";
 import {
   verifySignature,
   replyMessage,
@@ -13,15 +13,6 @@ import {
   BusinessCardResult,
 } from "@/lib/line";
 import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
-import type { Database } from "@/types/database";
-
-// Service role client to bypass RLS for webhook operations
-function createAdminClient() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -178,10 +169,11 @@ async function handleImageMessage(
       return;
     }
 
-    // Only save image for Pro users
+    // Only save image for Pro users (use email hash for folder name)
     let imageUrl: string | null = null;
     if (plan === "pro") {
-      const fileName = `${profileData.id}/${Date.now()}.jpg`;
+      const emailHash = Buffer.from(profileData.id).toString("base64url").slice(0, 20);
+      const fileName = `${emailHash}/${Date.now()}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from("card-images")

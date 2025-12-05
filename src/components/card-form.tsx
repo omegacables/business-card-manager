@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +18,6 @@ interface CardFormProps {
 
 export function CardForm({ initialData, mode }: CardFormProps) {
   const router = useRouter();
-  const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<CardFormData>({
     name: initialData?.name ?? "",
@@ -47,28 +45,32 @@ export function CardForm({ initialData, mode }: CardFormProps) {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("認証エラー");
-        return;
-      }
-
       if (mode === "create") {
-        const { error } = await (supabase as any).from("business_cards").insert({
-          ...formData,
-          user_id: user.id,
+        const res = await fetch("/api/cards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
         });
 
-        if (error) throw error;
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to create card");
+        }
+
         toast.success("名刺を登録しました");
         router.push("/cards");
       } else {
-        const { error } = await (supabase as any)
-          .from("business_cards")
-          .update(formData)
-          .eq("id", initialData!.id);
+        const res = await fetch(`/api/cards/${initialData!.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
 
-        if (error) throw error;
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to update card");
+        }
+
         toast.success("名刺を更新しました");
         router.push(`/cards/${initialData!.id}`);
       }
@@ -76,7 +78,7 @@ export function CardForm({ initialData, mode }: CardFormProps) {
       router.refresh();
     } catch (error) {
       console.error(error);
-      toast.error("エラーが発生しました");
+      toast.error(error instanceof Error ? error.message : "エラーが発生しました");
     } finally {
       setLoading(false);
     }

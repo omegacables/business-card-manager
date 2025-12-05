@@ -1,16 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth0";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/auth";
 import { CardForm } from "@/components/card-form";
 import type { BusinessCard } from "@/types/database";
-
-// Admin client to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 export default async function EditCardPage({
   params,
@@ -18,11 +10,11 @@ export default async function EditCardPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth0.getSession();
-  if (!session) {
+  if (!session?.user?.email) {
     redirect("/login");
   }
 
-  const userId = session.user.sub;
+  const userEmail = session.user.email;
   const { id } = await params;
   const supabase = createAdminClient();
 
@@ -30,7 +22,7 @@ export default async function EditCardPage({
     .from("business_cards")
     .select("*")
     .eq("id", id)
-    .eq("user_id", userId)
+    .eq("user_id", userEmail)
     .single();
 
   if (error || !data) {

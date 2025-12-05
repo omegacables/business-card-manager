@@ -1,5 +1,5 @@
 import { auth0 } from "@/lib/auth0";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -8,32 +8,24 @@ import { Input } from "@/components/ui/input";
 import { CardList } from "@/components/card-list";
 import { ExportCSVButton } from "@/components/export-buttons";
 
-// Admin client to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 export default async function CardsPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
   const session = await auth0.getSession();
-  if (!session) {
+  if (!session?.user?.email) {
     redirect("/login");
   }
 
-  const userId = session.user.sub;
+  const userEmail = session.user.email;
   const { q } = await searchParams;
   const supabase = createAdminClient();
 
   let query = supabase
     .from("business_cards")
     .select("*")
-    .eq("user_id", userId)
+    .eq("user_id", userEmail)
     .order("created_at", { ascending: false });
 
   if (q) {

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +28,6 @@ interface FormData {
 
 export function CardFormWithOCR() {
   const router = useRouter();
-  const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -92,24 +90,28 @@ export function CardFormWithOCR() {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("認証エラー");
+      const res = await fetch("/api/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.limitReached) {
+          toast.error("今月の登録上限に達しました。プロプランにアップグレードすると無制限に登録できます。");
+        } else {
+          throw new Error(data.error || "Failed to create card");
+        }
         return;
       }
 
-      const { error } = await (supabase as any).from("business_cards").insert({
-        ...formData,
-        user_id: user.id,
-      });
-
-      if (error) throw error;
       toast.success("名刺を登録しました");
       router.push("/cards");
       router.refresh();
     } catch (error) {
       console.error(error);
-      toast.error("エラーが発生しました");
+      toast.error(error instanceof Error ? error.message : "エラーが発生しました");
     } finally {
       setLoading(false);
     }

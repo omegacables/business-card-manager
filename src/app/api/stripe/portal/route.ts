@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createAdminClient } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
 
 export async function POST() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const authSession = await auth0.getSession();
+    const userEmail = authSession?.user?.email;
 
-    if (!user) {
+    if (!userEmail) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const supabase = createAdminClient();
+
     // Get customer id
-    const { data: subscription } = await (supabase as any)
+    const { data: subscription } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id")
-      .eq("user_id", user.id)
+      .eq("user_id", userEmail)
       .single();
 
     if (!subscription?.stripe_customer_id) {
@@ -23,12 +26,12 @@ export async function POST() {
     }
 
     // Create portal session
-    const session = await stripe.billingPortal.sessions.create({
+    const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
       return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/pricing`,
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: portalSession.url });
   } catch (error) {
     console.error("Portal error:", error);
     return NextResponse.json(

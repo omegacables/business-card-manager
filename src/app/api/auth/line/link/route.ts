@@ -18,20 +18,20 @@ export async function GET() {
   // Check if user is logged in with Auth0
   const session = await auth0.getSession();
 
-  if (!session) {
+  if (!session?.user?.email) {
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}login`);
   }
 
-  // Use Auth0 user ID (sub)
-  const user = { id: session.user.sub };
+  // Use email as user ID for cross-provider account linking
+  const userEmail = session.user.email;
 
   const channelId = process.env.LINE_LOGIN_CHANNEL_ID;
   const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}api/auth/line/link/callback`;
 
-  // Generate signed state token (contains user id, timestamp, nonce, signature)
-  const state = createSignedState(user.id);
+  // Generate signed state token (contains user email, timestamp, nonce, signature)
+  const state = createSignedState(userEmail);
 
-  console.log("[LINE Link] Starting OAuth flow for user:", user.id);
+  console.log("[LINE Link] Starting OAuth flow for user:", userEmail);
 
   // LINE OAuth authorization URL
   const authUrl = new URL("https://access.line.me/oauth2/v2.1/authorize");

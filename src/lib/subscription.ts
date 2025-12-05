@@ -1,24 +1,27 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createAdminClient } from "@/lib/auth";
 import type { Plan, Subscription, MonthlyUsage } from "@/types/database";
 import { getCurrentYearMonth, canRegisterCard, canSaveImage } from "@/lib/plans";
 
 export async function getUserSubscription(): Promise<Subscription | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth0.getSession();
+  const userEmail = session?.user?.email;
 
-  if (!user) return null;
+  if (!userEmail) return null;
 
-  const { data, error } = await (supabase as any)
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
     .from("subscriptions")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userEmail)
     .single();
 
   if (error || !data) {
     // Create default subscription if not exists
-    const { data: newSub } = await (supabase as any)
+    const { data: newSub } = await supabase
       .from("subscriptions")
-      .insert({ user_id: user.id, plan: "free", status: "active" })
+      .insert({ user_id: userEmail, plan: "free", status: "active" })
       .select()
       .single();
     return newSub as Subscription | null;
@@ -33,24 +36,25 @@ export async function getUserPlan(): Promise<Plan> {
 }
 
 export async function getMonthlyUsage(): Promise<MonthlyUsage | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth0.getSession();
+  const userEmail = session?.user?.email;
 
-  if (!user) return null;
+  if (!userEmail) return null;
 
+  const supabase = createAdminClient();
   const yearMonth = getCurrentYearMonth();
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("monthly_usage")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userEmail)
     .eq("year_month", yearMonth)
     .single();
 
   if (error || !data) {
     return {
       id: "",
-      user_id: user.id,
+      user_id: userEmail,
       year_month: yearMonth,
       cards_registered: 0,
       created_at: new Date().toISOString(),
@@ -62,11 +66,12 @@ export async function getMonthlyUsage(): Promise<MonthlyUsage | null> {
 }
 
 export async function incrementCardUsage(): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth0.getSession();
+  const userEmail = session?.user?.email;
 
-  if (!user) return { success: false, error: "認証エラー" };
+  if (!userEmail) return { success: false, error: "認証エラー" };
 
+  const supabase = createAdminClient();
   const yearMonth = getCurrentYearMonth();
   const plan = await getUserPlan();
   const usage = await getMonthlyUsage();
@@ -79,11 +84,11 @@ export async function incrementCardUsage(): Promise<{ success: boolean; error?: 
   }
 
   // Upsert usage record
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("monthly_usage")
     .upsert(
       {
-        user_id: user.id,
+        user_id: userEmail,
         year_month: yearMonth,
         cards_registered: (usage?.cards_registered ?? 0) + 1,
         updated_at: new Date().toISOString(),

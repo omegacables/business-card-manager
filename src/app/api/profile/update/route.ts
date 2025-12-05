@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { createClient } from "@supabase/supabase-js";
-
-// Admin client to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { createAdminClient } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,11 +10,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const userId = session.user.sub;
+    const userEmail = session.user.email;
+    if (!userEmail) {
+      return NextResponse.json({ error: "No email in session" }, { status: 400 });
+    }
+
     const body = await request.json();
     const { line_user_id } = body;
 
-    console.log("[Profile Update] User ID:", userId);
+    console.log("[Profile Update] User Email:", userEmail);
     console.log("[Profile Update] LINE User ID:", line_user_id);
 
     const supabase = createAdminClient();
@@ -31,7 +27,7 @@ export async function POST(request: NextRequest) {
     const { data: existingProfile } = await supabase
       .from("profiles")
       .select("id")
-      .eq("id", userId)
+      .eq("id", userEmail)
       .single();
 
     if (existingProfile) {
@@ -39,20 +35,20 @@ export async function POST(request: NextRequest) {
       const { error } = await supabase
         .from("profiles")
         .update({ line_user_id: line_user_id || null })
-        .eq("id", userId);
+        .eq("id", userEmail);
 
       if (error) {
         console.error("[Profile Update] Update failed:", error);
         return NextResponse.json({ error: "Update failed", details: error.message }, { status: 500 });
       }
     } else {
-      // Insert new profile (this might fail due to FK constraint)
+      // Insert new profile
       const { error } = await supabase
         .from("profiles")
         .insert({
-          id: userId,
+          id: userEmail,
           line_user_id: line_user_id || null,
-          email: session.user.email,
+          email: userEmail,
           display_name: session.user.name,
         });
 
@@ -61,7 +57,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           error: "Insert failed",
           details: error.message,
-          hint: "The profiles table may have a foreign key constraint on auth.users"
         }, { status: 500 });
       }
     }

@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createAdminClient } from "@/lib/auth";
 import { stripe, PRICE_IDS } from "@/lib/stripe";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await auth0.getSession();
+    const userEmail = session?.user?.email;
 
-    if (!user) {
+    if (!userEmail) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const supabase = createAdminClient();
 
     const { interval } = await request.json();
     const priceId = interval === "yearly" ? PRICE_IDS.pro_yearly : PRICE_IDS.pro_monthly;
@@ -19,10 +22,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already has a stripe customer id
-    const { data: subscription } = await (supabase as any)
+    const { data: subscription } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id")
-      .eq("user_id", user.id)
+      .eq("user_id", userEmail)
       .single();
 
     let customerId = subscription?.stripe_customer_id;
@@ -30,18 +33,18 @@ export async function POST(request: NextRequest) {
     // Create new customer if doesn't exist
     if (!customerId) {
       const customer = await stripe.customers.create({
-        email: user.email,
+        email: userEmail,
         metadata: {
-          supabase_user_id: user.id,
+          user_email: userEmail,
         },
       });
       customerId = customer.id;
 
       // Save customer id
-      await (supabase as any)
+      await supabase
         .from("subscriptions")
         .upsert({
-          user_id: user.id,
+          user_id: userEmail,
           stripe_customer_id: customerId,
           plan: "free",
           status: "active",
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
@@ -63,12 +66,12 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/pricing?canceled=true`,
       subscription_data: {
         metadata: {
-          supabase_user_id: user.id,
+          user_email: userEmail,
         },
       },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
     console.error("Checkout error:", error);
     return NextResponse.json(

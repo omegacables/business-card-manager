@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createAdminClient } from "@/lib/auth";
 import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
 import { checkCanRegisterCard, checkCanSaveImage } from "@/lib/subscription";
 
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await auth0.getSession();
+    const userEmail = session?.user?.email;
 
-    if (!user) {
+    if (!userEmail) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const supabase = createAdminClient();
 
     // Check registration limit
     const { allowed, remaining, error: limitError } = await checkCanRegisterCard();
@@ -52,8 +55,9 @@ export async function POST(request: NextRequest) {
     let imageUrl: string | null = null;
 
     if (canSaveImages) {
-      // Upload image to Supabase Storage
-      const fileName = `${user.id}/${Date.now()}.jpg`;
+      // Upload image to Supabase Storage (use email hash for folder name)
+      const emailHash = Buffer.from(userEmail).toString("base64url").slice(0, 20);
+      const fileName = `${emailHash}/${Date.now()}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from("card-images")

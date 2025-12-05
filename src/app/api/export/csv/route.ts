@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth0 } from "@/lib/auth0";
+import { createAdminClient } from "@/lib/auth";
 import { generateCSV } from "@/lib/export";
 import type { BusinessCard } from "@/types/database";
 
 export async function GET() {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await auth0.getSession();
+  if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userEmail = session.user.email;
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("business_cards")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userEmail)
     .order("created_at", { ascending: false });
 
   if (error) {

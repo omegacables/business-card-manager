@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { createClient } from "@supabase/supabase-js";
-
-// Admin client to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { createAdminClient } from "@/lib/auth";
 
 export async function GET() {
   try {
@@ -18,14 +10,18 @@ export async function GET() {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const userId = session.user.sub;
+    const userEmail = session.user.email;
+    if (!userEmail) {
+      return NextResponse.json({ error: "No email in session" }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
 
-    // Get or create profile
+    // Get or create profile using email as ID
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", userId)
+      .eq("id", userEmail)
       .single();
 
     if (error && error.code === "PGRST116") {
@@ -33,8 +29,8 @@ export async function GET() {
       const { data: newProfile, error: createError } = await supabase
         .from("profiles")
         .insert({
-          id: userId,
-          email: session.user.email,
+          id: userEmail,
+          email: userEmail,
           display_name: session.user.name,
         })
         .select()
@@ -43,15 +39,15 @@ export async function GET() {
       if (createError) {
         console.error("Failed to create profile:", createError);
         return NextResponse.json(
-          { user: { id: userId, email: session.user.email }, profile: null },
+          { user: { id: userEmail, email: userEmail }, profile: null },
           { status: 200 }
         );
       }
 
       return NextResponse.json({
         user: {
-          id: userId,
-          email: session.user.email,
+          id: userEmail,
+          email: userEmail,
           name: session.user.name,
           picture: session.user.picture,
         },
@@ -61,8 +57,8 @@ export async function GET() {
 
     return NextResponse.json({
       user: {
-        id: userId,
-        email: session.user.email,
+        id: userEmail,
+        email: userEmail,
         name: session.user.name,
         picture: session.user.picture,
       },
