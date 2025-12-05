@@ -98,6 +98,11 @@ export default function SettingsPage() {
       if (!res.ok) {
         const errorData = await res.json();
         console.error("Update error:", errorData);
+        if (errorData.error === "line_already_linked") {
+          toast.error("このLINE IDは既に別のアカウントに紐づいています");
+          setLoading(false);
+          return;
+        }
         throw new Error(errorData.details || "Update failed");
       }
 
