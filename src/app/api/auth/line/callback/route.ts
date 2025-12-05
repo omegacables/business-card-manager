@@ -238,8 +238,23 @@ export async function GET(request: NextRequest) {
 
     const { createServerClient } = await import("@supabase/ssr");
 
+    // Check if profile is complete to determine redirect destination
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("email, display_name")
+      .eq("id", userId)
+      .single();
+
+    const needsOnboarding =
+      !profileData ||
+      !profileData.email ||
+      !profileData.display_name ||
+      profileData.email.endsWith("@line.local");
+
+    const redirectUrl = needsOnboarding ? `${siteUrl}onboarding` : `${siteUrl}dashboard`;
+
     // Prepare response for setting cookies
-    const response = NextResponse.redirect(`${siteUrl}dashboard`);
+    const response = NextResponse.redirect(redirectUrl);
 
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
