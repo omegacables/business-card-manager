@@ -8,6 +8,8 @@ import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const session = await auth0.getSession();
+  console.log("[Dashboard] Session:", JSON.stringify(session?.user, null, 2));
+
   if (!session) {
     redirect("/");
   }
@@ -20,26 +22,34 @@ export default async function DashboardPage() {
     ? session.user.sub.replace("line|", "")
     : null;
 
+  console.log("[Dashboard] Looking for profile:", { userEmail, lineUserId });
+
   let profile = null;
+  let profileError = null;
   if (userEmail) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("email", userEmail)
       .single();
     profile = data;
+    profileError = error;
+    console.log("[Dashboard] Email lookup result:", { data, error: error?.message });
   }
   if (!profile && lineUserId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("line_user_id", lineUserId)
       .single();
     profile = data;
+    profileError = error;
+    console.log("[Dashboard] LINE lookup result:", { data, error: error?.message });
   }
 
   // プロフィールがない場合は設定ページへ
   if (!profile) {
+    console.log("[Dashboard] No profile found, redirecting to settings");
     redirect("/settings?setup=email");
   }
 
@@ -55,7 +65,7 @@ export default async function DashboardPage() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId);
 
-  console.log("[Dashboard] Card count query:", { userId, count: cardCount, error: countError });
+  console.log("[Dashboard] Card count query:", { userId, count: cardCount, error: JSON.stringify(countError) });
 
   const { data, error: dataError } = await supabase
     .from("business_cards")
@@ -64,7 +74,14 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(5);
 
-  console.log("[Dashboard] Cards query:", { userId, dataLength: data?.length, error: dataError });
+  console.log("[Dashboard] Cards query:", { userId, dataLength: data?.length, error: JSON.stringify(dataError), data: data?.map(c => ({ id: c.id, name: c.name, user_id: c.user_id })) });
+
+  // Debug: Also check all cards to see what user_ids exist
+  const { data: allCards } = await supabase
+    .from("business_cards")
+    .select("id, name, user_id")
+    .limit(5);
+  console.log("[Dashboard] Sample cards in DB:", allCards);
 
   const recentCards = (data || []) as BusinessCard[];
   const isPro = subscription?.plan === "pro";
