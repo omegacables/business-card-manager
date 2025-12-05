@@ -14,9 +14,12 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState("");
   const [lineUserId, setLineUserId] = useState("");
   const [currentLineUserId, setCurrentLineUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
 
   // LINE公式アカウントのURL（環境変数から取得、またはデフォルト）
@@ -56,6 +59,8 @@ export default function SettingsPage() {
         if (res.ok) {
           const data = await res.json();
           setUserId(data.user?.id);
+          setCurrentEmail(data.profile?.email || data.user?.email || null);
+          setNewEmail(data.profile?.email || data.user?.email || "");
           if (data.profile?.line_user_id) {
             setCurrentLineUserId(data.profile.line_user_id);
             setLineUserId(data.profile.line_user_id);
@@ -98,9 +103,96 @@ export default function SettingsPage() {
     }
   };
 
+  const handleEmailSave = async () => {
+    if (!newEmail) {
+      toast.error("メールアドレスを入力してください");
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      toast.error("有効なメールアドレスを入力してください");
+      return;
+    }
+
+    if (newEmail === currentEmail) {
+      toast.info("メールアドレスは変更されていません");
+      return;
+    }
+
+    setEmailLoading(true);
+    try {
+      const res = await fetch("/api/profile/update-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error === "email_exists") {
+          toast.error("このメールアドレスは既に使用されています");
+        } else {
+          toast.error(data.error || "メールアドレスの更新に失敗しました");
+        }
+        return;
+      }
+
+      setCurrentEmail(newEmail);
+      toast.success("メールアドレスを更新しました");
+    } catch (error) {
+      console.error(error);
+      toast.error("エラーが発生しました");
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-foreground">設定</h1>
+
+      {/* アカウント設定カード */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            アカウント設定
+          </CardTitle>
+          <CardDescription>
+            メールアドレスを設定・変更できます。同じメールアドレスを使用すると、GoogleログインとLINEログインで同じアカウントとして認識されます。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">メールアドレス</Label>
+            <Input
+              id="email"
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="example@example.com"
+            />
+            {currentEmail && (
+              <p className="text-sm text-muted-foreground">
+                現在のメールアドレス: {currentEmail}
+              </p>
+            )}
+            {!currentEmail && (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                メールアドレスが設定されていません。設定することで、GoogleやLINEどちらでログインしても同じアカウントとして認識されます。
+              </p>
+            )}
+          </div>
+          <Button onClick={handleEmailSave} disabled={emailLoading}>
+            {emailLoading ? "保存中..." : "メールアドレスを保存"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* LINE連携カード */}
       <Card>
