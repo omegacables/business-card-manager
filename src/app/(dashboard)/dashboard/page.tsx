@@ -43,22 +43,28 @@ export default async function DashboardPage() {
     redirect("/settings?setup=email");
   }
 
-  // プロフィールのIDをuser_idとして使用（名刺はprofile.idで保存されている）
+  // プロフィールのIDをuser_idとして使用
   const userId = profile.id;
+  console.log("[Dashboard] Profile found:", { id: profile.id, email: profile.email });
+
   const subscription = await getUserSubscription();
 
-  // profile.idまたはprofile.emailで検索（移行期間中の互換性のため）
-  const { count: cardCount } = await supabase
+  // profile.idで検索
+  const { count: cardCount, error: countError } = await supabase
     .from("business_cards")
     .select("*", { count: "exact", head: true })
-    .or(`user_id.eq.${userId},user_id.eq.${profile.email}`);
+    .eq("user_id", userId);
 
-  const { data } = await supabase
+  console.log("[Dashboard] Card count query:", { userId, count: cardCount, error: countError });
+
+  const { data, error: dataError } = await supabase
     .from("business_cards")
     .select("*")
-    .or(`user_id.eq.${userId},user_id.eq.${profile.email}`)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(5);
+
+  console.log("[Dashboard] Cards query:", { userId, dataLength: data?.length, error: dataError });
 
   const recentCards = (data || []) as BusinessCard[];
   const isPro = subscription?.plan === "pro";
