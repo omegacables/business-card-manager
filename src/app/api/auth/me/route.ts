@@ -16,8 +16,52 @@ export async function GET() {
     const userName = session.user.name;
     const userPicture = session.user.picture;
 
-    // If no email (e.g., LINE login), return user info without profile
-    // This allows the onboarding page to work
+    // Extract LINE user ID if this is a LINE login
+    const lineUserId = userSub?.startsWith("line|") ? userSub.replace("line|", "") : null;
+
+    const supabase = createAdminClient();
+
+    // Try to find profile by email or LINE ID
+    let profile = null;
+    let profileError = null;
+
+    if (userEmail) {
+      // Look up by email first
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("email", userEmail)
+        .single();
+      profile = data;
+      profileError = error;
+    }
+
+    // If no profile found by email, try by LINE ID
+    if (!profile && lineUserId) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("line_user_id", lineUserId)
+        .single();
+      profile = data;
+      profileError = error;
+    }
+
+    // If LINE user found a profile with email, return it
+    if (profile) {
+      return NextResponse.json({
+        user: {
+          id: profile.id,
+          email: profile.email || userEmail,
+          sub: userSub,
+          name: userName,
+          picture: userPicture,
+        },
+        profile,
+      });
+    }
+
+    // No profile found - if no email, can't create one
     if (!userEmail) {
       return NextResponse.json({
         user: {
@@ -31,14 +75,7 @@ export async function GET() {
       });
     }
 
-    const supabase = createAdminClient();
-
-    // Get or create profile using email column
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("email", userEmail)
-      .single();
+    const error = profileError;
 
     if (error && error.code === "PGRST116") {
       // Profile doesn't exist, create it with generated UUID
