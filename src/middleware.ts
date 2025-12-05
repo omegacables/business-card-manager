@@ -1,8 +1,17 @@
-import { type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { type NextRequest, NextResponse } from "next/server";
+import { auth0 } from "@/lib/auth0";
 
 export async function middleware(request: NextRequest) {
-  return await updateSession(request);
+  // Handle Auth0 authentication routes
+  const authResponse = await auth0.middleware(request);
+
+  // If Auth0 handled the request, return its response
+  if (authResponse.status !== 404) {
+    return authResponse;
+  }
+
+  // For other routes, just continue
+  return NextResponse.next();
 }
 
 export const config = {

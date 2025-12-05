@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 function LoginForm() {
@@ -10,21 +9,13 @@ function LoginForm() {
   const [lineLoading, setLineLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const searchParams = useSearchParams();
-  const supabase = createClient();
 
   useEffect(() => {
     const errorParam = searchParams.get("error");
     if (errorParam) {
       const errorMessages: Record<string, string> = {
-        line_auth_failed: "LINEログインに失敗しました",
-        invalid_state: "認証エラーが発生しました。もう一度お試しください",
-        token_exchange_failed: "認証に失敗しました",
-        profile_fetch_failed: "プロフィールの取得に失敗しました",
-        user_creation_failed: "アカウントの作成に失敗しました",
-        session_failed: "セッションの作成に失敗しました",
-        configuration_error: "設定エラー（環境変数を確認）",
-        no_code: "認証コードがありません",
-        google_auth_failed: "Googleログインに失敗しました",
+        auth_failed: "ログインに失敗しました",
+        access_denied: "アクセスが拒否されました",
       };
       setError(errorMessages[errorParam] || "エラーが発生しました");
     }
@@ -32,21 +23,14 @@ function LoginForm() {
 
   const handleLineLogin = () => {
     setLineLoading(true);
-    window.location.href = "/api/auth/line";
+    // Auth0経由でLINEログイン (v4: /auth/login instead of /api/auth/login)
+    window.location.href = "/auth/login?connection=line";
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     setGoogleLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      setError(error.message);
-      setGoogleLoading(false);
-    }
+    // Auth0経由でGoogleログイン (v4: /auth/login instead of /api/auth/login)
+    window.location.href = "/auth/login?connection=google-oauth2";
   };
 
   return (

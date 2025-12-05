@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.13.2",
     "@hookform/resolvers": "^5.2.2",
     "@line/bot-sdk": "^10.5.0",
     "@radix-ui/react-avatar": "^1.1.11",
