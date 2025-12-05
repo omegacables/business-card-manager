@@ -1,6 +1,7 @@
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 
 // Admin client to bypass RLS
 function createAdminClient() {
@@ -39,44 +40,37 @@ export const auth0 = new Auth0Client({
     }
 
     try {
-      // Check if profile exists with this email (by id or email column)
+      // Check if profile exists with this email
       const supabase = createAdminClient();
 
-      // First try to find by id = email
-      let { data: profile } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("id, email")
-        .eq("id", email)
+        .eq("email", email)
         .single();
-
-      // If not found by id, try by email column
-      if (!profile) {
-        const { data: profileByEmail } = await supabase
-          .from("profiles")
-          .select("id, email")
-          .eq("email", email)
-          .single();
-        profile = profileByEmail;
-      }
 
       console.log("[Auth0 Callback] Existing profile:", profile);
 
       if (!profile) {
-        // Create profile with email as ID
+        // Create profile with generated UUID
         console.log("[Auth0 Callback] Creating new profile for:", email);
+        const newId = randomUUID();
         const { error: insertError } = await supabase.from("profiles").insert({
-          id: email,
+          id: newId,
           email: email,
           display_name: session?.user?.name || null,
         });
 
         if (insertError) {
-          console.error("[Auth0 Callback] Profile insert error:", insertError);
+          console.error("[Auth0 Callback] Profile insert error:", JSON.stringify(insertError));
+        } else {
+          // Also create subscription
+          await supabase.from("subscriptions").insert({
+            user_id: newId,
+            plan: "free",
+            status: "active",
+          });
         }
-      } else if (profile.id !== email) {
-        // Profile exists but with different id format, update it
-        console.log("[Auth0 Callback] Updating profile id from", profile.id, "to", email);
-        // Note: This might need manual migration
       }
 
       console.log("[Auth0 Callback] Redirecting to dashboard");

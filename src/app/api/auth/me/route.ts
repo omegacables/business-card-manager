@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
+import { randomUUID } from "crypto";
 
 export async function GET() {
   try {
@@ -32,19 +33,20 @@ export async function GET() {
 
     const supabase = createAdminClient();
 
-    // Get or create profile using email as ID
+    // Get or create profile using email column
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", userEmail)
+      .eq("email", userEmail)
       .single();
 
     if (error && error.code === "PGRST116") {
-      // Profile doesn't exist, create it
+      // Profile doesn't exist, create it with generated UUID
+      const newId = randomUUID();
       const { data: newProfile, error: createError } = await supabase
         .from("profiles")
         .insert({
-          id: userEmail,
+          id: newId,
           email: userEmail,
           display_name: userName,
         })
@@ -52,16 +54,23 @@ export async function GET() {
         .single();
 
       if (createError) {
-        console.error("Failed to create profile:", createError);
+        console.error("Failed to create profile:", JSON.stringify(createError));
         return NextResponse.json(
-          { user: { id: userEmail, email: userEmail, sub: userSub, name: userName, picture: userPicture }, profile: null },
+          { user: { id: newId, email: userEmail, sub: userSub, name: userName, picture: userPicture }, profile: null },
           { status: 200 }
         );
       }
 
+      // Also create subscription
+      await supabase.from("subscriptions").insert({
+        user_id: newId,
+        plan: "free",
+        status: "active",
+      });
+
       return NextResponse.json({
         user: {
-          id: userEmail,
+          id: newId,
           email: userEmail,
           sub: userSub,
           name: userName,
@@ -73,7 +82,7 @@ export async function GET() {
 
     return NextResponse.json({
       user: {
-        id: userEmail,
+        id: profile.id,
         email: userEmail,
         sub: userSub,
         name: userName,

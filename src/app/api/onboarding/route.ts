@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
+import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,8 +29,8 @@ export async function POST(request: NextRequest) {
     // Check if this email is already used by another profile
     const { data: existingProfile } = await supabase
       .from("profiles")
-      .select("id, line_user_id, display_name")
-      .eq("id", email)
+      .select("id, email, line_user_id, display_name")
+      .eq("email", email)
       .single();
 
     if (existingProfile) {
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Profile exists but no LINE - link this LINE account to it
-      console.log("[Onboarding] Linking LINE to existing profile:", email);
+      console.log("[Onboarding] Linking LINE to existing profile:", email, "profile id:", existingProfile.id);
 
       // Extract LINE user ID from auth sub (format: line|Uxxxxxx)
       const lineUserId = authSub.startsWith("line|") ? authSub.replace("line|", "") : null;
@@ -53,10 +54,10 @@ export async function POST(request: NextRequest) {
             line_user_id: lineUserId,
             display_name: display_name || existingProfile.display_name || authName,
           })
-          .eq("id", email);
+          .eq("id", existingProfile.id);
 
         if (updateError) {
-          console.error("[Onboarding] Update error:", updateError);
+          console.error("[Onboarding] Update error:", JSON.stringify(updateError));
           return NextResponse.json({ error: "Failed to link account" }, { status: 500 });
         }
       }
@@ -69,16 +70,17 @@ export async function POST(request: NextRequest) {
 
     // Extract LINE user ID from auth sub
     const lineUserId = authSub.startsWith("line|") ? authSub.replace("line|", "") : null;
+    const newId = randomUUID();
 
     const { error: insertError } = await supabase.from("profiles").insert({
-      id: email,
+      id: newId,
       email: email,
       display_name: display_name || authName,
       line_user_id: lineUserId,
     });
 
     if (insertError) {
-      console.error("[Onboarding] Insert error:", insertError);
+      console.error("[Onboarding] Insert error:", JSON.stringify(insertError));
       // Check if it's a unique constraint error
       if (insertError.code === "23505") {
         return NextResponse.json({ error: "email_exists" }, { status: 409 });
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     // Also create default subscription
     await supabase.from("subscriptions").insert({
-      user_id: email,
+      user_id: newId,
       plan: "free",
       status: "active",
     });
