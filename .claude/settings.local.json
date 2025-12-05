@@ -22,7 +22,9 @@
       "WebFetch(domain:zenn.dev)",
       "WebSearch",
       "Bash(curl:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "mcp__stripe__search_stripe_documentation",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []
