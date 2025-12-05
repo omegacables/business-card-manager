@@ -29,47 +29,75 @@ export const auth0 = new Auth0Client({
       return NextResponse.redirect(new URL("/login?error=auth_failed", baseUrl));
     }
 
-    // Check if user has email
     const email = session?.user?.email;
-    console.log("[Auth0 Callback] Email:", email);
+    const authSub = session?.user?.sub;
+    const lineUserId = authSub?.startsWith("line|") ? authSub.replace("line|", "") : null;
 
-    if (!email) {
-      // No email from provider, redirect to onboarding
-      console.log("[Auth0 Callback] No email, redirecting to onboarding");
-      return NextResponse.redirect(new URL("/onboarding", baseUrl));
-    }
+    console.log("[Auth0 Callback] Email:", email);
+    console.log("[Auth0 Callback] LINE user ID:", lineUserId);
 
     try {
-      // Check if profile exists with this email
       const supabase = createAdminClient();
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, email")
-        .eq("email", email)
-        .single();
+      if (!email && lineUserId) {
+        // LINE user without email - check if they have a profile by LINE ID
+        console.log("[Auth0 Callback] LINE user without email, checking for existing profile");
 
-      console.log("[Auth0 Callback] Existing profile:", profile);
+        const { data: lineProfile } = await supabase
+          .from("profiles")
+          .select("id, email, line_user_id")
+          .eq("line_user_id", lineUserId)
+          .single();
 
-      if (!profile) {
-        // Create profile with generated UUID
-        console.log("[Auth0 Callback] Creating new profile for:", email);
-        const newId = randomUUID();
-        const { error: insertError } = await supabase.from("profiles").insert({
-          id: newId,
-          email: email,
-          display_name: session?.user?.name || null,
-        });
+        if (lineProfile && lineProfile.email) {
+          // Has profile with email set, go to dashboard
+          console.log("[Auth0 Callback] Found profile with email, redirecting to dashboard");
+          return NextResponse.redirect(new URL("/dashboard", baseUrl));
+        }
 
-        if (insertError) {
-          console.error("[Auth0 Callback] Profile insert error:", JSON.stringify(insertError));
-        } else {
-          // Also create subscription
-          await supabase.from("subscriptions").insert({
-            user_id: newId,
-            plan: "free",
-            status: "active",
+        // No profile or no email - redirect to settings to set email
+        console.log("[Auth0 Callback] No email set, redirecting to settings");
+        return NextResponse.redirect(new URL("/settings?setup=email", baseUrl));
+      }
+
+      if (email) {
+        // User has email, check/create profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, email, line_user_id")
+          .eq("email", email)
+          .single();
+
+        console.log("[Auth0 Callback] Existing profile:", profile);
+
+        if (!profile) {
+          // Create profile with generated UUID
+          console.log("[Auth0 Callback] Creating new profile for:", email);
+          const newId = randomUUID();
+          const { error: insertError } = await supabase.from("profiles").insert({
+            id: newId,
+            email: email,
+            display_name: session?.user?.name || null,
+            line_user_id: lineUserId,
           });
+
+          if (insertError) {
+            console.error("[Auth0 Callback] Profile insert error:", JSON.stringify(insertError));
+          } else {
+            // Also create subscription
+            await supabase.from("subscriptions").insert({
+              user_id: newId,
+              plan: "free",
+              status: "active",
+            });
+          }
+        } else if (lineUserId && !profile.line_user_id) {
+          // Link LINE to existing profile
+          console.log("[Auth0 Callback] Linking LINE to existing profile");
+          await supabase
+            .from("profiles")
+            .update({ line_user_id: lineUserId })
+            .eq("id", profile.id);
         }
       }
 

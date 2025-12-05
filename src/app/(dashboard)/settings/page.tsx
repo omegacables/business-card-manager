@@ -31,10 +31,18 @@ export default function SettingsPage() {
     // Handle success/error messages from LINE link
     const success = searchParams.get("success");
     const error = searchParams.get("error");
+    const setup = searchParams.get("setup");
 
     if (success === "line_linked") {
       toast.success("LINEアカウントを連携しました");
-      // Clear URL params
+      window.history.replaceState({}, "", "/settings");
+    }
+
+    if (setup === "email") {
+      toast.info("メールアドレスを設定してください", {
+        duration: 5000,
+        description: "メールアドレスを設定すると、GoogleやLINEどちらでログインしても同じアカウントとして認識されます。",
+      });
       window.history.replaceState({}, "", "/settings");
     }
 
