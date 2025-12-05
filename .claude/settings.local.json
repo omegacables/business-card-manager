@@ -21,7 +21,8 @@
       "Bash(git push)",
       "WebFetch(domain:zenn.dev)",
       "WebSearch",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
