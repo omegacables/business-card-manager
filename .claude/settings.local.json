@@ -24,7 +24,8 @@
       "Bash(curl:*)",
       "Bash(cat:*)",
       "mcp__stripe__search_stripe_documentation",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:vercel.com)"
     ],
     "deny": [],
     "ask": []
