@@ -14,18 +14,47 @@ export default async function CardsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const session = await auth0.getSession();
-  if (!session?.user?.email) {
-    redirect("/login");
+  if (!session) {
+    redirect("/");
   }
 
-  const userEmail = session.user.email;
   const { q } = await searchParams;
   const supabase = createAdminClient();
+
+  // プロフィールを取得（メールまたはLINE IDで）
+  const userEmail = session.user.email;
+  const lineUserId = session.user.sub?.startsWith("line|")
+    ? session.user.sub.replace("line|", "")
+    : null;
+
+  let profile = null;
+  if (userEmail) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("email", userEmail)
+      .single();
+    profile = data;
+  }
+  if (!profile && lineUserId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("line_user_id", lineUserId)
+      .single();
+    profile = data;
+  }
+
+  if (!profile) {
+    redirect("/settings?setup=email");
+  }
+
+  const userId = profile.id;
 
   let query = supabase
     .from("business_cards")
     .select("*")
-    .eq("user_id", userEmail)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (q) {

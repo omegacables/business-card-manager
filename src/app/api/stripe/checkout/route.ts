@@ -3,15 +3,50 @@ import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { stripe, PRICE_IDS } from "@/lib/stripe";
 
+// Helper to get user's profile ID and email
+async function getUserProfile(session: { user: { email?: string; sub?: string } } | null): Promise<{ id: string; email: string } | null> {
+  if (!session) return null;
+
+  const supabase = createAdminClient();
+  const userEmail = session.user.email;
+  const lineUserId = session.user.sub?.startsWith("line|")
+    ? session.user.sub.replace("line|", "")
+    : null;
+
+  let profile = null;
+  if (userEmail) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .eq("email", userEmail)
+      .single();
+    profile = data;
+  }
+  if (!profile && lineUserId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .eq("line_user_id", lineUserId)
+      .single();
+    profile = data;
+  }
+  if (profile && profile.email) {
+    return { id: profile.id, email: profile.email };
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth0.getSession();
-    const userEmail = session?.user?.email;
+    const profile = await getUserProfile(session);
 
-    if (!userEmail) {
+    if (!profile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = profile.id;
+    const userEmail = profile.email;
     const supabase = createAdminClient();
 
     const { interval } = await request.json();
@@ -25,7 +60,7 @@ export async function POST(request: NextRequest) {
     const { data: subscription } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id")
-      .eq("user_id", userEmail)
+      .eq("user_id", userId)
       .single();
 
     let customerId = subscription?.stripe_customer_id;
@@ -35,6 +70,7 @@ export async function POST(request: NextRequest) {
       const customer = await stripe.customers.create({
         email: userEmail,
         metadata: {
+          user_id: userId,
           user_email: userEmail,
         },
       });
@@ -44,7 +80,7 @@ export async function POST(request: NextRequest) {
       await supabase
         .from("subscriptions")
         .upsert({
-          user_id: userEmail,
+          user_id: userId,
           stripe_customer_id: customerId,
           plan: "free",
           status: "active",
@@ -66,6 +102,7 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/pricing?canceled=true`,
       subscription_data: {
         metadata: {
+          user_id: userId,
           user_email: userEmail,
         },
       },
