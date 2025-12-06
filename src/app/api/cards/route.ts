@@ -3,12 +3,42 @@ import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { incrementCardUsage } from "@/lib/subscription";
 
+// Helper to get user's profile ID
+async function getUserProfileId(session: { user: { email?: string; sub?: string } } | null): Promise<string | null> {
+  if (!session) return null;
+
+  const supabase = createAdminClient();
+  const userEmail = session.user.email;
+  const lineUserId = session.user.sub?.startsWith("line|")
+    ? session.user.sub.replace("line|", "")
+    : null;
+
+  let profile = null;
+  if (userEmail) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", userEmail)
+      .single();
+    profile = data;
+  }
+  if (!profile && lineUserId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("line_user_id", lineUserId)
+      .single();
+    profile = data;
+  }
+  return profile?.id || null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth0.getSession();
-    const userEmail = session?.user?.email;
+    const userId = await getUserProfileId(session);
 
-    if (!userEmail) {
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -48,7 +78,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("business_cards")
       .insert({
-        user_id: userEmail,
+        user_id: userId,
         name,
         name_kana: name_kana || null,
         company_name: company_name || null,
