@@ -16,6 +16,13 @@ export const auth0 = new Auth0Client({
   authorizationParameters: {
     scope: "openid profile email",
   },
+  // Cookie settings for Safari/mobile compatibility
+  session: {
+    cookie: {
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    },
+  },
   // Redirect after login - check if profile exists
   async onCallback(error, context, session) {
     const baseUrl = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || "";
