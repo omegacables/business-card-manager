@@ -1,75 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
-
-// Helper to get user's profile ID
-async function getUserProfileId(session: { user: { email?: string; sub?: string } } | null): Promise<string | null> {
-  if (!session) return null;
-
-  const supabase = createAdminClient();
-  const userEmail = session.user.email;
-  const lineUserId = session.user.sub?.startsWith("line|")
-    ? session.user.sub.replace("line|", "")
-    : null;
-
-  let profile = null;
-  if (userEmail) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", userEmail)
-      .single();
-    profile = data;
-  }
-  if (!profile && lineUserId) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("line_user_id", lineUserId)
-      .single();
-    profile = data;
-  }
-  return profile?.id || null;
-}
+import { getCurrentProfileId } from "@/lib/user";
+import { cardInputSchema } from "@/lib/validation";
+import { logger } from "@/lib/logger";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth0.getSession();
-    const userId = await getUserProfileId(session);
-
+    const userId = await getCurrentProfileId();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const {
-      name,
-      name_kana,
-      company_name,
-      department,
-      position,
-      email,
-      phone,
-      mobile,
-      fax,
-      postal_code,
-      address,
-      website,
-      notes,
-      image_url,
-    } = body;
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    const raw = await request.json();
+    const parsed = cardInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "入力内容が不正です" },
+        { status: 400 }
+      );
     }
+    const input = parsed.data;
 
     const supabase = createAdminClient();
 
-    // Verify ownership
+    // Verify ownership before update.
     const { data: existing } = await supabase
       .from("business_cards")
       .select("id")
@@ -84,20 +42,7 @@ export async function PUT(
     const { data, error } = await supabase
       .from("business_cards")
       .update({
-        name,
-        name_kana: name_kana || null,
-        company_name: company_name || null,
-        department: department || null,
-        position: position || null,
-        email: email || null,
-        phone: phone || null,
-        mobile: mobile || null,
-        fax: fax || null,
-        postal_code: postal_code || null,
-        address: address || null,
-        website: website || null,
-        notes: notes || null,
-        image_url: image_url || null,
+        ...input,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -106,16 +51,16 @@ export async function PUT(
       .single();
 
     if (error) {
-      console.error("Card update error:", error);
+      logger.error("[cards/:id] update error", error.message);
       return NextResponse.json(
-        { error: "Failed to update card" },
+        { error: "名刺の更新に失敗しました" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ success: true, card: data });
   } catch (error) {
-    console.error("API error:", error);
+    logger.error("[cards/:id] unexpected error", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -125,9 +70,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth0.getSession();
-    const userId = await getUserProfileId(session);
-
+    const userId = await getCurrentProfileId();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -142,16 +85,16 @@ export async function DELETE(
       .eq("user_id", userId);
 
     if (error) {
-      console.error("Card delete error:", error);
+      logger.error("[cards/:id] delete error", error.message);
       return NextResponse.json(
-        { error: "Failed to delete card" },
+        { error: "名刺の削除に失敗しました" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("API error:", error);
+    logger.error("[cards/:id] unexpected error", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

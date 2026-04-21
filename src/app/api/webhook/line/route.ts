@@ -13,6 +13,9 @@ import {
   BusinessCardResult,
 } from "@/lib/line";
 import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
+import { uploadCardImage } from "@/lib/storage";
+import { logger, maskId } from "@/lib/logger";
+import { sanitizeSearchQuery } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // Verify webhook signature
     if (!verifySignature(body, signature)) {
-      console.error("Invalid signature");
+      logger.error("Invalid signature");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Webhook error:", error);
+    logger.error("Webhook error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -169,27 +172,11 @@ async function handleImageMessage(
       return;
     }
 
-    // Only save image for Pro users (use email hash for folder name)
+    // Only save image for Pro users (private bucket + signed URL).
     let imageUrl: string | null = null;
     if (plan === "pro") {
-      const emailHash = Buffer.from(profileData.id).toString("base64url").slice(0, 20);
-      const fileName = `${emailHash}/${Date.now()}.jpg`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("card-images")
-        .upload(fileName, imageBuffer, {
-          contentType: "image/jpeg",
-          upsert: false,
-        });
-
-      if (!uploadError) {
-        const { data: urlData } = supabase.storage
-          .from("card-images")
-          .getPublicUrl(fileName);
-        imageUrl = urlData.publicUrl;
-      } else {
-        console.error("Image upload error:", uploadError);
-      }
+      const folder = Buffer.from(profileData.id).toString("base64url").slice(0, 20);
+      imageUrl = await uploadCardImage(folder, imageBuffer, "image/jpeg");
     }
 
     // Save to database
@@ -245,7 +232,7 @@ async function handleImageMessage(
       { type: "text", text: responseText, quickReply: quickReplyButtons },
     ]);
   } catch (error) {
-    console.error("Error processing image:", error);
+    logger.error("Error processing image:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     await replyMessage(event.replyToken, [
       {
@@ -290,7 +277,7 @@ async function handleTextMessage(
     try {
       await replyMessage(event.replyToken, [createWelcomeMessage(siteUrl)]);
     } catch (error) {
-      console.error("Help message error:", error);
+      logger.error("Help message error:", error);
       // Fallback to simple text message
       await replyMessage(event.replyToken, [
         {
@@ -368,13 +355,26 @@ async function handleSearch(
   }
 
   try {
-    // Search business cards by name, company, or other fields
+    // Sanitize to prevent PostgREST filter injection via user input.
+    const safeQuery = sanitizeSearchQuery(query);
+    if (!safeQuery) {
+      await replyMessage(replyToken, [
+        {
+          type: "text",
+          text: "検索キーワードが無効です。別のキーワードをお試しください。",
+          quickReply: quickReplyButtons,
+        },
+      ]);
+      return;
+    }
+
+    // Search business cards by name, company, or other fields (user-scoped).
     const profileData = profile as { id: string };
     const { data: cards, error: searchError } = await supabase
       .from("business_cards")
       .select("id, name, company_name, department, position, email, phone, mobile")
       .eq("user_id", profileData.id)
-      .or(`name.ilike.%${query}%,company_name.ilike.%${query}%,department.ilike.%${query}%,position.ilike.%${query}%,email.ilike.%${query}%`)
+      .or(`name.ilike.%${safeQuery}%,company_name.ilike.%${safeQuery}%,department.ilike.%${safeQuery}%,position.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%`)
       .order("updated_at", { ascending: false })
       .limit(10);
 
@@ -389,7 +389,7 @@ async function handleSearch(
       createSearchResultMessage(searchResults, query, siteUrl),
     ]);
   } catch (error) {
-    console.error("Search error:", error);
+    logger.error("Search error:", error);
     await replyMessage(replyToken, [
       {
         type: "text",

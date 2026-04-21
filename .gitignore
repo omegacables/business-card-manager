@@ -31,3 +31,4 @@ Thumbs.db
 EOF
 .vercel
 .env*.local
+tsconfig.tsbuildinfo

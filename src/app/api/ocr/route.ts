@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { createAdminClient } from "@/lib/auth";
 import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
 import { checkCanRegisterCard, checkCanSaveImage } from "@/lib/subscription";
+import { validateOcrFile } from "@/lib/validation";
+import { uploadCardImage } from "@/lib/storage";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
     const session = await auth0.getSession();
     const userEmail = session?.user?.email;
 
@@ -14,9 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const supabase = createAdminClient();
-
-    // Check registration limit
+    // Check monthly registration limit BEFORE running OCR (save API costs).
     const { allowed, remaining, error: limitError } = await checkCanRegisterCard();
     if (!allowed) {
       return NextResponse.json(
@@ -28,52 +27,35 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("image") as File | null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+    const validation = validateOcrFile(file);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
-    // Convert file to base64
-    const bytes = await file.arrayBuffer();
+    const bytes = await file!.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64 = buffer.toString("base64");
 
-    // Perform OCR
+    // OCR
     const ocrText = await performOCR(base64);
-
     if (!ocrText) {
       return NextResponse.json(
-        { error: "No text found in image" },
+        { error: "画像から文字を検出できませんでした" },
         { status: 400 }
       );
     }
 
-    // Parse the OCR text with AI
+    // Parse with AI
     const parsedData = await parseBusinessCardWithAI(ocrText);
 
-    // Check if user can save images (Pro plan only)
+    // Pro-only image storage (uses signed URLs; bucket is private).
     const canSaveImages = await checkCanSaveImage();
     let imageUrl: string | null = null;
 
     if (canSaveImages) {
-      // Upload image to Supabase Storage (use email hash for folder name)
       const emailHash = Buffer.from(userEmail).toString("base64url").slice(0, 20);
-      const fileName = `${emailHash}/${Date.now()}.jpg`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("card-images")
-        .upload(fileName, buffer, {
-          contentType: file.type || "image/jpeg",
-          upsert: false,
-        });
-
-      if (!uploadError) {
-        const { data: urlData } = supabase.storage
-          .from("card-images")
-          .getPublicUrl(fileName);
-        imageUrl = urlData.publicUrl;
-      } else {
-        console.error("Image upload error:", uploadError);
-      }
+      const contentType = file!.type || "image/jpeg";
+      imageUrl = await uploadCardImage(emailHash, buffer, contentType);
     }
 
     return NextResponse.json({
@@ -84,9 +66,9 @@ export async function POST(request: NextRequest) {
       canSaveImages,
     });
   } catch (error) {
-    console.error("OCR error:", error);
+    logger.error("[ocr] unexpected error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "OCR failed" },
+      { error: "画像の解析に失敗しました。別の画像でお試しください。" },
       { status: 500 }
     );
   }

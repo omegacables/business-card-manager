@@ -2,6 +2,7 @@ import { Auth0Client } from "@auth0/nextjs-auth0/server";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { logger, maskEmail, maskId } from "@/lib/logger";
 
 // Admin client to bypass RLS
 function createAdminClient() {
@@ -27,12 +28,12 @@ export const auth0 = new Auth0Client({
   async onCallback(error, context, session) {
     const baseUrl = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || "";
 
-    console.log("[Auth0 Callback] Starting callback handler");
-    console.log("[Auth0 Callback] Base URL:", baseUrl);
-    console.log("[Auth0 Callback] Session user:", session?.user?.email, session?.user?.sub);
+    logger.log("[Auth0 Callback] Starting callback handler");
+    logger.log("[Auth0 Callback] Base URL:", baseUrl);
+    logger.log("[Auth0 Callback] Session user:", maskEmail(session?.user?.email), maskId(session?.user?.sub));
 
     if (error) {
-      console.error("[Auth0 Callback] Error:", error);
+      logger.error("[Auth0 Callback] Error:", error);
       return NextResponse.redirect(new URL("/login?error=auth_failed", baseUrl));
     }
 
@@ -40,15 +41,15 @@ export const auth0 = new Auth0Client({
     const authSub = session?.user?.sub;
     const lineUserId = authSub?.startsWith("line|") ? authSub.replace("line|", "") : null;
 
-    console.log("[Auth0 Callback] Email:", email);
-    console.log("[Auth0 Callback] LINE user ID:", lineUserId);
+    logger.log("[Auth0 Callback] Email:", maskEmail(email));
+    logger.log("[Auth0 Callback] LINE user ID:", maskId(lineUserId));
 
     try {
       const supabase = createAdminClient();
 
       if (!email && lineUserId) {
         // LINE user without email - check if they have a profile by LINE ID
-        console.log("[Auth0 Callback] LINE user without email, checking for existing profile");
+        logger.log("[Auth0 Callback] LINE user without email, checking for existing profile");
 
         const { data: lineProfile } = await supabase
           .from("profiles")
@@ -58,12 +59,12 @@ export const auth0 = new Auth0Client({
 
         if (lineProfile && lineProfile.email) {
           // Has profile with email set, go to dashboard
-          console.log("[Auth0 Callback] Found profile with email, redirecting to dashboard");
+          logger.log("[Auth0 Callback] Found profile with email, redirecting to dashboard");
           return NextResponse.redirect(new URL("/dashboard", baseUrl));
         }
 
         // No profile or no email - redirect to settings to set email
-        console.log("[Auth0 Callback] No email set, redirecting to settings");
+        logger.log("[Auth0 Callback] No email set, redirecting to settings");
         return NextResponse.redirect(new URL("/settings?setup=email", baseUrl));
       }
 
@@ -75,11 +76,11 @@ export const auth0 = new Auth0Client({
           .eq("email", email)
           .single();
 
-        console.log("[Auth0 Callback] Existing profile:", profile);
+        logger.log("[Auth0 Callback] Existing profile found:", !!profile);
 
         if (!profile) {
           // Create profile with generated UUID
-          console.log("[Auth0 Callback] Creating new profile for:", email);
+          logger.log("[Auth0 Callback] Creating new profile for:", maskEmail(email));
           const newId = randomUUID();
           const { error: insertError } = await supabase.from("profiles").insert({
             id: newId,
@@ -89,7 +90,7 @@ export const auth0 = new Auth0Client({
           });
 
           if (insertError) {
-            console.error("[Auth0 Callback] Profile insert error:", JSON.stringify(insertError));
+            logger.error("[Auth0 Callback] Profile insert error:", JSON.stringify(insertError));
           } else {
             // Also create subscription
             await supabase.from("subscriptions").insert({
@@ -100,7 +101,7 @@ export const auth0 = new Auth0Client({
           }
         } else if (lineUserId && !profile.line_user_id) {
           // Link LINE to existing profile
-          console.log("[Auth0 Callback] Linking LINE to existing profile");
+          logger.log("[Auth0 Callback] Linking LINE to existing profile");
           await supabase
             .from("profiles")
             .update({ line_user_id: lineUserId })
@@ -108,10 +109,10 @@ export const auth0 = new Auth0Client({
         }
       }
 
-      console.log("[Auth0 Callback] Redirecting to dashboard");
+      logger.log("[Auth0 Callback] Redirecting to dashboard");
       return NextResponse.redirect(new URL("/dashboard", baseUrl));
     } catch (err) {
-      console.error("[Auth0 Callback] Unexpected error:", err);
+      logger.error("[Auth0 Callback] Unexpected error:", err);
       return NextResponse.redirect(new URL("/dashboard", baseUrl));
     }
   },
