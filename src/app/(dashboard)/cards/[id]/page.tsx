@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteCardButton } from "@/components/delete-card-button";
 import { ExportVCardButton } from "@/components/export-buttons";
 import { getUserPlan } from "@/lib/subscription";
+import { refreshCardImageSignedUrl } from "@/lib/storage";
 import type { BusinessCard } from "@/types/database";
 
 export default async function CardDetailPage({
@@ -67,6 +68,13 @@ export default async function CardDetailPage({
   const card = data as BusinessCard;
   const canViewImage = plan === "pro";
 
+  // Stored URLs go stale (pre-privatization public URLs, expired signed URLs),
+  // so mint a fresh short-lived signed URL on every render.
+  let imageUrl: string | null = null;
+  if (card.image_url && canViewImage) {
+    imageUrl = await refreshCardImageSignedUrl(card.image_url);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -88,16 +96,22 @@ export default async function CardDetailPage({
           </CardHeader>
           <CardContent>
             {canViewImage ? (
-              <>
-                <a href={card.image_url} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={card.image_url}
-                    alt={`${card.name}の名刺`}
-                    className="max-w-full md:max-w-md rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
-                  />
-                </a>
-                <p className="text-xs text-muted-foreground mt-2">クリックで拡大</p>
-              </>
+              imageUrl ? (
+                <>
+                  <a href={imageUrl} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={imageUrl}
+                      alt={`${card.name}の名刺`}
+                      className="max-w-full md:max-w-md rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
+                    />
+                  </a>
+                  <p className="text-xs text-muted-foreground mt-2">クリックで拡大</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground py-4">
+                  画像を読み込めませんでした。時間をおいて再度お試しください。
+                </p>
+              )
             ) : (
               <div className="flex flex-col items-center justify-center py-8 px-4 bg-muted/50 rounded-lg border border-dashed border-border">
                 <svg className="w-12 h-12 text-muted-foreground mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -260,7 +260,7 @@ export function CardFormWithOCR() {
           <CardContent>
             <textarea
               id="notes"
-              className="w-full min-h-[100px] p-3 border border-border rounded-md resize-none bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full min-h-[100px] p-3 border border-border rounded-md resize-none text-base md:text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               value={formData.notes}
               onChange={(e) => handleChange("notes", e.target.value)}
               placeholder="メモを入力..."

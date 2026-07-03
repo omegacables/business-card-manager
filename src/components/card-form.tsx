@@ -218,7 +218,7 @@ export function CardForm({ initialData, mode }: CardFormProps) {
           <CardContent>
             <textarea
               id="notes"
-              className="w-full min-h-[100px] p-3 border rounded-md resize-none"
+              className="w-full min-h-[100px] p-3 border rounded-md resize-none text-base md:text-sm"
               value={formData.notes ?? ""}
               onChange={(e) => handleChange("notes", e.target.value)}
               placeholder="メモを入力..."
