@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteCardButton } from "@/components/delete-card-button";
 import { ExportVCardButton } from "@/components/export-buttons";
+import { FollowUpButton } from "@/components/followup-button";
 import { getUserPlan } from "@/lib/subscription";
 import { refreshCardImageSignedUrl } from "@/lib/storage";
-import type { BusinessCard } from "@/types/database";
+import type { BusinessCard, Activity } from "@/types/database";
+import { Handshake, Phone, Mail, MessageCircle, StickyNote, ListChecks } from "lucide-react";
 
 export default async function CardDetailPage({
   params,
@@ -75,11 +77,27 @@ export default async function CardDetailPage({
     imageUrl = await refreshCardImageSignedUrl(card.image_url);
   }
 
+  // Activity timeline (empty until migration 004 is applied — never breaks the page)
+  let activities: Activity[] = [];
+  try {
+    const { data: activityData } = await (supabase as any)
+      .from("activities")
+      .select("*")
+      .eq("card_id", card.id)
+      .eq("user_id", userId)
+      .order("occurred_at", { ascending: false })
+      .limit(50);
+    activities = (activityData ?? []) as Activity[];
+  } catch {
+    activities = [];
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-foreground">{card.name}</h1>
         <div className="flex flex-wrap gap-2">
+          <FollowUpButton cardId={id} cardEmail={card.email} />
           <ExportVCardButton cardId={id} />
           <Link href={'/cards/' + id + '/edit'}>
             <Button variant="outline">編集</Button>
@@ -180,12 +198,86 @@ export default async function CardDetailPage({
         )}
       </div>
 
+      {/* 活動タイムライン */}
+      <Card>
+        <CardHeader>
+          <CardTitle>やり取りの履歴</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {activities.length > 0 ? (
+            <ol className="relative border-l border-border ml-3 space-y-6">
+              {activities.map((activity) => (
+                <li key={activity.id} className="ml-6">
+                  <span className="absolute -left-3.5 flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary">
+                    <ActivityIcon type={activity.type} />
+                  </span>
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">
+                      {ACTIVITY_LABEL[activity.type] ?? activity.type}
+                    </span>
+                    <time className="text-xs text-muted-foreground tabular-nums">
+                      {new Date(activity.occurred_at).toLocaleString("ja-JP", {
+                        timeZone: "Asia/Tokyo",
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </time>
+                  </div>
+                  {activity.title && (
+                    <p className="mt-1 font-medium text-foreground">{activity.title}</p>
+                  )}
+                  {activity.content && (
+                    <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">
+                      {activity.content}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="text-center py-8 space-y-2">
+              <p className="text-muted-foreground">まだ記録がありません。</p>
+              <p className="text-sm text-muted-foreground">
+                LINEで会話を転送して「記録 {card.name}」と送ると、AIが要約してここに記録されます。
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="text-sm text-muted-foreground">
         <p>登録日: {new Date(card.created_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</p>
         <p>更新日: {new Date(card.updated_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</p>
       </div>
     </div>
   );
+}
+
+const ACTIVITY_LABEL: Record<string, string> = {
+  meeting: "打ち合わせ",
+  call: "電話",
+  email: "メール",
+  line: "LINE",
+  note: "メモ",
+  task: "タスク",
+};
+
+function ActivityIcon({ type }: { type: string }) {
+  const props = { className: "w-3.5 h-3.5", strokeWidth: 1.8 };
+  switch (type) {
+    case "meeting":
+      return <Handshake {...props} />;
+    case "call":
+      return <Phone {...props} />;
+    case "email":
+      return <Mail {...props} />;
+    case "line":
+      return <MessageCircle {...props} />;
+    case "task":
+      return <ListChecks {...props} />;
+    default:
+      return <StickyNote {...props} />;
+  }
 }
 
 function InfoRow({

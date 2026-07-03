@@ -16,6 +16,7 @@ import { performOCR, parseBusinessCardWithAI } from "@/lib/ocr";
 import { uploadCardImage } from "@/lib/storage";
 import { logger, maskId } from "@/lib/logger";
 import { sanitizeSearchQuery } from "@/lib/validation";
+import { summarizeConversation } from "@/lib/ai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -264,7 +265,7 @@ async function handleTextMessage(
       {
         type: "text",
         text: lineUserId
-          ? `あなたのユーザーIDは：\n${lineUserId}\n\n━━━━━━━━━━━━━━\n📝 LINE連携の設定手順\n━━━━━━━━━━━━━━\n\n① 上のユーザーIDを長押ししてコピー\n\n② 下記URLにアクセス\n${siteUrl}/settings\n\n③ 「LINE ユーザーID」欄にペースト\n\n④ 「保存」ボタンをタップ\n\n━━━━━━━━━━━━━━\n✅ 設定完了後、名刺の写真を送信すると自動で登録されます！`
+          ? `あなたのユーザーIDは：\n${lineUserId}\n\n━━━━━━━━━━━━━━\n📝 LINE連携の設定手順\n━━━━━━━━━━━━━━\n\n① 下記URLにアクセス\n${siteUrl}/settings\n\n② 「LINEと連携する」ボタンをタップ\n\n③ LINEでログインして許可\n\n━━━━━━━━━━━━━━\n✅ 連携完了後、名刺の写真を送信すると自動で登録されます！`
           : "ユーザーIDを取得できませんでした。",
         quickReply: quickReplyButtons,
       },
@@ -290,6 +291,9 @@ async function handleTextMessage(
 🔍 名刺の検索
 → 「検索 名前」で検索できます
 
+📝 会話・商談の記録
+→ 会話を転送し、最後に「記録 田中太郎」と送るとAIが要約して履歴に記録します
+
 🆔 LINE ID取得
 → 「id」と送信してください
 
@@ -308,14 +312,261 @@ async function handleTextMessage(
     return;
   }
 
-  // Default response with search hint
-  await replyMessage(event.replyToken, [
-    {
-      type: "text",
-      text: "名刺の画像を送信するか、「検索 名前」で名刺を検索できます。\n\n例: 検索 田中\n例: @山田\n\n「ヘルプ」と送信すると使い方を確認できます。",
-      quickReply: quickReplyButtons,
-    },
-  ]);
+  // Record command: 「記録 田中太郎」 — flush forwarded messages into an activity
+  const recordMatch = originalText.match(/^記録[\s　]*([\s\S]*)$/);
+  if (recordMatch) {
+    await handleRecord(event.replyToken, lineUserId, recordMatch[1].trim());
+    return;
+  }
+
+  // Cancel buffered messages
+  if (text === "クリア" || text === "キャンセル") {
+    await handleClearInbox(event.replyToken, lineUserId);
+    return;
+  }
+
+  // Any other text: buffer it as a forwarded conversation snippet
+  await handleBufferText(event.replyToken, lineUserId, originalText);
+}
+
+/** Look up the user's profile id from their LINE user id. */
+async function findProfileId(lineUserId: string | undefined): Promise<string | null> {
+  if (!lineUserId) return null;
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("line_user_id", lineUserId)
+    .single();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+const INBOX_WINDOW_MINUTES = 60;
+
+/** Buffer a forwarded/typed message so 「記録 <名前>」 can summarize it later. */
+async function handleBufferText(
+  replyToken: string,
+  lineUserId: string | undefined,
+  content: string
+): Promise<void> {
+  const profileId = await findProfileId(lineUserId);
+  if (!profileId) {
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "LINEアカウントが連携されていません。\nWebサイトの設定ページから「LINEと連携する」をタップしてください。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+    return;
+  }
+
+  const supabase = createAdminClient();
+
+  try {
+    const { error: insertError } = await (supabase as any)
+      .from("line_inbox")
+      .insert({ user_id: profileId, content: content.slice(0, 4000) });
+
+    if (insertError) throw insertError;
+
+    const since = new Date(Date.now() - INBOX_WINDOW_MINUTES * 60 * 1000).toISOString();
+    const { count } = await (supabase as any)
+      .from("line_inbox")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", profileId)
+      .gte("created_at", since);
+
+    // Guide on the first message; stay quiet afterwards to avoid spam
+    // while the user forwards a batch of messages.
+    if ((count ?? 1) <= 1) {
+      await replyMessage(replyToken, [
+        {
+          type: "text",
+          text: "メッセージを受け付けました（1件）。\n\n会話の転送を続けて、最後に「記録 田中太郎」のように相手の名前を送ると、AIが要約してその方の履歴に記録します。\n\n・やり直す場合は「クリア」\n・名刺の検索は「検索 名前」",
+          quickReply: quickReplyButtons,
+        },
+      ]);
+    }
+  } catch (error) {
+    logger.error("[LINE inbox] buffer failed:", error);
+    // Table may not exist yet (migration 004 not applied) — fall back to the old help reply.
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "名刺の画像を送信するか、「検索 名前」で名刺を検索できます。\n\n例: 検索 田中\n例: @山田\n\n「ヘルプ」と送信すると使い方を確認できます。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+  }
+}
+
+/** Discard buffered messages. */
+async function handleClearInbox(
+  replyToken: string,
+  lineUserId: string | undefined
+): Promise<void> {
+  const profileId = await findProfileId(lineUserId);
+  if (!profileId) return;
+
+  const supabase = createAdminClient();
+  try {
+    await (supabase as any).from("line_inbox").delete().eq("user_id", profileId);
+    await replyMessage(replyToken, [
+      { type: "text", text: "受け付けたメッセージをクリアしました。", quickReply: quickReplyButtons },
+    ]);
+  } catch (error) {
+    logger.error("[LINE inbox] clear failed:", error);
+  }
+}
+
+/** 「記録 <名前>」: summarize buffered messages and attach them to the named contact. */
+async function handleRecord(
+  replyToken: string,
+  lineUserId: string | undefined,
+  args: string
+): Promise<void> {
+  const profileId = await findProfileId(lineUserId);
+  if (!profileId) {
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "LINEアカウントが連携されていません。\nWebサイトの設定ページから「LINEと連携する」をタップしてください。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+    return;
+  }
+
+  // First line = contact name; any further lines = inline content
+  const [nameLine, ...rest] = args.split("\n");
+  const name = sanitizeSearchQuery(nameLine ?? "").slice(0, 50);
+  const inlineContent = rest.join("\n").trim();
+
+  if (!name) {
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "記録する相手の名前を付けてください。\n\n例: 記録 田中太郎",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+    return;
+  }
+
+  const supabase = createAdminClient();
+
+  try {
+    // 1. Find the contact
+    const { data: cards, error: cardError } = await supabase
+      .from("business_cards")
+      .select("id, name, company_name")
+      .eq("user_id", profileId)
+      .or(`name.ilike.%${name}%,company_name.ilike.%${name}%`)
+      .order("updated_at", { ascending: false })
+      .limit(3);
+
+    if (cardError) throw cardError;
+
+    const matches = (cards ?? []) as Array<{ id: string; name: string; company_name: string | null }>;
+    if (matches.length === 0) {
+      await replyMessage(replyToken, [
+        {
+          type: "text",
+          text: `「${name}」に一致する名刺が見つかりませんでした。\n先に名刺を登録するか、登録済みの名前で指定してください。`,
+          quickReply: quickReplyButtons,
+        },
+      ]);
+      return;
+    }
+    const card = matches[0];
+
+    // 2. Collect buffered messages (+ inline content)
+    const since = new Date(Date.now() - INBOX_WINDOW_MINUTES * 60 * 1000).toISOString();
+    const { data: inbox } = await (supabase as any)
+      .from("line_inbox")
+      .select("id, content, created_at")
+      .eq("user_id", profileId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true });
+
+    const inboxRows = (inbox ?? []) as Array<{ id: string; content: string }>;
+    const combined = [
+      ...inboxRows.map((r) => r.content),
+      ...(inlineContent ? [inlineContent] : []),
+    ]
+      .join("\n")
+      .trim();
+
+    if (!combined) {
+      await replyMessage(replyToken, [
+        {
+          type: "text",
+          text: `記録する内容がありません。\n\n会話を転送してから「記録 ${card.name}」と送るか、\n「記録 ${card.name}\n打ち合わせの内容...」のように改行して内容を書いてください。`,
+          quickReply: quickReplyButtons,
+        },
+      ]);
+      return;
+    }
+
+    // 3. Summarize with AI (fall back to raw text if AI is unavailable)
+    const summary = await summarizeConversation(combined);
+    const activityType = summary?.type ?? "line";
+    const title = summary?.title ?? "LINEからの記録";
+    const contentParts = [summary?.summary ?? combined.slice(0, 1000)];
+    if (summary && summary.tasks.length > 0) {
+      contentParts.push("\n【タスク】\n" + summary.tasks.map((t) => `・${t}`).join("\n"));
+    }
+
+    // 4. Save the activity
+    const { error: insertError } = await (supabase as any).from("activities").insert({
+      user_id: profileId,
+      card_id: card.id,
+      type: activityType,
+      title,
+      content: contentParts.join("\n"),
+      source: "line",
+    });
+
+    if (insertError) throw insertError;
+
+    // 5. Clear the buffer
+    if (inboxRows.length > 0) {
+      await (supabase as any)
+        .from("line_inbox")
+        .delete()
+        .in("id", inboxRows.map((r) => r.id));
+    }
+
+    const typeLabel: Record<string, string> = {
+      meeting: "打ち合わせ",
+      call: "電話",
+      email: "メール",
+      line: "LINE",
+      note: "メモ",
+      task: "タスク",
+    };
+
+    let replyText = `${card.name}さん${card.company_name ? `（${card.company_name}）` : ""}の履歴に記録しました。\n\n`;
+    replyText += `【${typeLabel[activityType] ?? "記録"}】${title}\n`;
+    replyText += contentParts.join("\n").slice(0, 800);
+    if (matches.length > 1) {
+      replyText += `\n\n※同名候補が${matches.length}件ありました。別の方の場合はWebサイトで修正してください。`;
+    }
+
+    await replyMessage(replyToken, [
+      { type: "text", text: replyText, quickReply: quickReplyButtons },
+    ]);
+  } catch (error) {
+    logger.error("[LINE record] failed:", error);
+    await replyMessage(replyToken, [
+      {
+        type: "text",
+        text: "記録の保存中にエラーが発生しました。時間をおいて再度お試しください。",
+        quickReply: quickReplyButtons,
+      },
+    ]);
+  }
 }
 
 async function handleSearch(

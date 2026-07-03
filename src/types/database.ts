@@ -150,6 +150,22 @@ export type Tag = Database["public"]["Tables"]["tags"]["Row"];
 export type CardTag = Database["public"]["Tables"]["card_tags"]["Row"];
 
 export type Plan = "free" | "pro";
+
+// 活動記録（アポ・商談・会話履歴）。migration 004 で追加。
+export type ActivityType = "meeting" | "call" | "email" | "line" | "note" | "task";
+export type ActivitySource = "manual" | "line" | "calendar" | "ai";
+
+export interface Activity {
+  id: string;
+  user_id: string;
+  card_id: string;
+  type: ActivityType;
+  title: string | null;
+  content: string | null;
+  occurred_at: string;
+  source: ActivitySource;
+  created_at: string;
+}
 export type SubscriptionStatus = "active" | "canceled" | "past_due";
 
 export interface Subscription {
