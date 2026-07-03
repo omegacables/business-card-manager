@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CardList } from "@/components/card-list";
 import { ExportCSVButton } from "@/components/export-buttons";
+import { sanitizeSearchQuery } from "@/lib/validation";
 
 export default async function CardsPage({
   searchParams,
@@ -57,9 +58,10 @@ export default async function CardsPage({
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
-  if (q) {
+  const safeQuery = q ? sanitizeSearchQuery(q) : "";
+  if (safeQuery) {
     query = query.or(
-      `name.ilike.%${q}%,company_name.ilike.%${q}%,email.ilike.%${q}%`
+      `name.ilike.%${safeQuery}%,company_name.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%`
     );
   }
 

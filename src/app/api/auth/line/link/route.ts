@@ -1,3 +1,4 @@
+import { logger, maskEmail, maskId } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { randomBytes, createHmac } from "crypto";
 import { auth0 } from "@/lib/auth0";
@@ -31,7 +32,7 @@ export async function GET() {
   // Generate signed state token (contains user email, timestamp, nonce, signature)
   const state = createSignedState(userEmail);
 
-  console.log("[LINE Link] Starting OAuth flow for user:", userEmail);
+  logger.log("[LINE Link] Starting OAuth flow for user:", maskEmail(userEmail));
 
   // LINE OAuth authorization URL
   const authUrl = new URL("https://access.line.me/oauth2/v2.1/authorize");

@@ -1,3 +1,4 @@
+import { logger, maskEmail, maskId } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -82,10 +83,10 @@ export async function GET(request: NextRequest) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
   const cookieStore = await cookies();
 
-  console.log("[LINE Callback] Received callback");
-  console.log("[LINE Callback] Code:", code ? "present" : "missing");
-  console.log("[LINE Callback] State:", state ? "present" : "missing");
-  console.log("[LINE Callback] Error:", error);
+  logger.log("[LINE Callback] Received callback");
+  logger.log("[LINE Callback] Code:", code ? "present" : "missing");
+  logger.log("[LINE Callback] State:", state ? "present" : "missing");
+  logger.log("[LINE Callback] Error:", error);
 
   // Handle errors from LINE
   if (error) {
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${siteUrl}login?error=invalid_state`);
   }
 
-  console.log("[LINE Callback] State verified successfully");
+  logger.log("[LINE Callback] State verified successfully");
 
   if (!code) {
     return NextResponse.redirect(`${siteUrl}login?error=no_code`);
@@ -107,9 +108,9 @@ export async function GET(request: NextRequest) {
 
   try {
     // Exchange code for access token
-    console.log("[LINE Callback] Exchanging code for token...");
-    console.log("[LINE Callback] Channel ID set:", !!process.env.LINE_LOGIN_CHANNEL_ID);
-    console.log("[LINE Callback] Channel Secret set:", !!process.env.LINE_LOGIN_CHANNEL_SECRET);
+    logger.log("[LINE Callback] Exchanging code for token...");
+    logger.log("[LINE Callback] Channel ID set:", !!process.env.LINE_LOGIN_CHANNEL_ID);
+    logger.log("[LINE Callback] Channel Secret set:", !!process.env.LINE_LOGIN_CHANNEL_SECRET);
 
     const tokenResponse = await fetch("https://api.line.me/oauth2/v2.1/token", {
       method: "POST",
@@ -132,10 +133,10 @@ export async function GET(request: NextRequest) {
     }
 
     const tokenData: LineTokenResponse = await tokenResponse.json();
-    console.log("[LINE Callback] Token exchange successful");
+    logger.log("[LINE Callback] Token exchange successful");
 
     // Get user profile
-    console.log("[LINE Callback] Fetching user profile...");
+    logger.log("[LINE Callback] Fetching user profile...");
     const profileResponse = await fetch("https://api.line.me/v2/profile", {
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
@@ -149,20 +150,20 @@ export async function GET(request: NextRequest) {
     }
 
     const profile: LineProfile = await profileResponse.json();
-    console.log("[LINE Callback] Profile fetched:", profile.displayName, profile.userId);
+    logger.log("[LINE Callback] Profile fetched:", maskId(profile.userId));
 
     // Create or get user in Supabase
     const supabase = createAdminClient();
 
     // Check if user exists with this LINE ID
-    console.log("[LINE Callback] Checking for existing user...");
+    logger.log("[LINE Callback] Checking for existing user...");
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
       .eq("line_user_id", profile.userId)
       .single();
 
-    console.log("[LINE Callback] Existing profile:", existingProfile, "Error:", profileError?.message);
+    logger.log("[LINE Callback] Existing profile:", maskId(existingProfile?.id), "Error:", profileError?.message);
 
     const userPassword = generateLinePassword(profile.userId);
 
@@ -172,7 +173,7 @@ export async function GET(request: NextRequest) {
     if (existingProfile) {
       // User exists with this LINE ID - get their actual email
       userId = existingProfile.id;
-      console.log("[LINE Callback] Existing user found:", userId);
+      logger.log("[LINE Callback] Existing user found:", maskId(userId));
 
       // Get the user's actual email from auth.users
       const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
@@ -183,7 +184,7 @@ export async function GET(request: NextRequest) {
       }
 
       userEmail = userData.user.email!;
-      console.log("[LINE Callback] User email:", userEmail);
+      logger.log("[LINE Callback] User email:", maskEmail(userEmail));
 
       // Only update password for LINE-created users (don't overwrite email users' passwords)
       if (userEmail.endsWith("@line.local")) {
@@ -197,7 +198,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // Create new user with LINE info and deterministic password
-      console.log("[LINE Callback] Creating new user...");
+      logger.log("[LINE Callback] Creating new user...");
       userEmail = `line_${profile.userId}@line.local`;
 
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -217,7 +218,7 @@ export async function GET(request: NextRequest) {
       }
 
       userId = authData.user.id;
-      console.log("[LINE Callback] User created:", userId);
+      logger.log("[LINE Callback] User created:", maskId(userId));
 
       // Update profile with LINE ID
       const { error: updateError } = await supabase
@@ -229,12 +230,12 @@ export async function GET(request: NextRequest) {
         .eq("id", userId);
 
       if (updateError) {
-        console.log("[LINE Callback] Profile update error:", updateError.message);
+        logger.log("[LINE Callback] Profile update error:", updateError.message);
       }
     }
 
     // Sign in the user with password using SSR client
-    console.log("[LINE Callback] Signing in user...");
+    logger.log("[LINE Callback] Signing in user...");
 
     const { createServerClient } = await import("@supabase/ssr");
 
@@ -283,7 +284,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${siteUrl}login?error=session_failed`);
     }
 
-    console.log("[LINE Callback] Sign in successful, redirecting to dashboard");
+    logger.log("[LINE Callback] Sign in successful, redirecting to dashboard");
     return response;
   } catch (error) {
     console.error("[LINE Callback] Unexpected error:", error);

@@ -1,3 +1,4 @@
+import { logger, maskEmail, maskId } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { createAdminClient } from "@/lib/auth";
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
 
-  console.log("[LINE Link Callback] Received callback");
+  logger.log("[LINE Link Callback] Received callback");
 
   // Handle errors from LINE
   if (error) {
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${siteUrl}settings?error=invalid_state`);
   }
 
-  console.log("[LINE Link Callback] Verified user email:", userEmail);
+  logger.log("[LINE Link Callback] Verified user email:", maskEmail(userEmail));
 
   if (!code) {
     return NextResponse.redirect(`${siteUrl}settings?error=no_code`);

@@ -6,6 +6,14 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
+  LayoutDashboard,
+  Contact,
+  PlusCircle,
+  Settings,
+  Gem,
+  type LucideIcon,
+} from "lucide-react";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -22,12 +30,12 @@ interface AppUser {
   };
 }
 
-const navigation = [
-  { name: "ダッシュボード", href: "/dashboard", icon: "📊" },
-  { name: "名刺一覧", href: "/cards", icon: "📇" },
-  { name: "新規登録", href: "/cards/new", icon: "➕" },
-  { name: "設定", href: "/settings", icon: "⚙️" },
-  { name: "サブスクリプション", href: "/pricing", icon: "💎" },
+const navigation: { name: string; href: string; icon: LucideIcon }[] = [
+  { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+  { name: "名刺一覧", href: "/cards", icon: Contact },
+  { name: "新規登録", href: "/cards/new", icon: PlusCircle },
+  { name: "設定", href: "/settings", icon: Settings },
+  { name: "サブスクリプション", href: "/pricing", icon: Gem },
 ];
 
 export function Sidebar({ user }: { user: AppUser }) {
@@ -99,7 +107,7 @@ export function Sidebar({ user }: { user: AppUser }) {
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
               >
-                <span>{item.icon}</span>
+                <item.icon className="w-4 h-4 shrink-0" strokeWidth={1.8} />
                 {item.name}
               </Link>
             );

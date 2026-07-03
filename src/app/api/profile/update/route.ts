@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { randomUUID } from "crypto";
+import { logger, maskEmail, maskId } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,11 +21,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { line_user_id } = body;
 
-    // Use the LINE ID from the request, or from auth sub
+    // Only two operations are allowed here:
+    //  - unlink (line_user_id: null)
+    //  - link the LINE ID proven by the current session (LINE login)
+    // Linking an arbitrary LINE ID would let anyone hijack another user's
+    // LINE-submitted cards; that flow must go through /api/auth/line/link (OAuth).
+    if (line_user_id && line_user_id !== authLineUserId) {
+      return NextResponse.json({
+        error: "line_link_requires_oauth",
+        details: "LINE連携は「LINEアカウントを連携」ボタンから行ってください",
+      }, { status: 403 });
+    }
+
     const targetLineUserId = line_user_id || authLineUserId;
 
-    console.log("[Profile Update] User Email:", userEmail);
-    console.log("[Profile Update] LINE User ID:", targetLineUserId);
+    logger.log("[Profile Update] User Email:", maskEmail(userEmail));
+    logger.log("[Profile Update] LINE User ID:", maskId(targetLineUserId));
 
     const supabase = createAdminClient();
 
@@ -40,12 +52,12 @@ export async function POST(request: NextRequest) {
         // LINE ID already used
         if (userEmail && existingLineProfile.email === userEmail) {
           // It's the same user, already linked
-          console.log("[Profile Update] LINE already linked to this user");
+          logger.log("[Profile Update] LINE already linked to this user");
           return NextResponse.json({ success: true, already_linked: true });
         }
 
         // LINE ID is used by another profile
-        console.log("[Profile Update] LINE ID already used by:", existingLineProfile.email);
+        logger.log("[Profile Update] LINE ID already used by:", maskEmail(existingLineProfile.email));
         return NextResponse.json({
           error: "line_already_linked",
           details: "このLINE IDは既に別のアカウントに紐づいています"
@@ -76,19 +88,19 @@ export async function POST(request: NextRequest) {
 
     if (profile) {
       // Update existing profile
-      console.log("[Profile Update] Updating profile:", profile.id);
+      logger.log("[Profile Update] Updating profile:", maskId(profile.id));
       const { error } = await supabase
         .from("profiles")
         .update({ line_user_id: targetLineUserId || null })
         .eq("id", profile.id);
 
       if (error) {
-        console.error("[Profile Update] Update failed:", error);
-        return NextResponse.json({ error: "Update failed", details: error.message }, { status: 500 });
+        logger.error("[Profile Update] Update failed:", error);
+        return NextResponse.json({ error: "Update failed" }, { status: 500 });
       }
     } else if (userEmail) {
       // Insert new profile
-      console.log("[Profile Update] Creating new profile for:", userEmail);
+      logger.log("[Profile Update] Creating new profile for:", maskEmail(userEmail));
       const newId = randomUUID();
       const { error } = await supabase
         .from("profiles")
@@ -100,11 +112,8 @@ export async function POST(request: NextRequest) {
         });
 
       if (error) {
-        console.error("[Profile Update] Insert failed:", error);
-        return NextResponse.json({
-          error: "Insert failed",
-          details: error.message,
-        }, { status: 500 });
+        logger.error("[Profile Update] Insert failed:", error);
+        return NextResponse.json({ error: "Insert failed" }, { status: 500 });
       }
 
       // Create subscription
@@ -119,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Profile Update] Error:", error);
-    return NextResponse.json({ error: "Internal error", details: String(error) }, { status: 500 });
+    logger.error("[Profile Update] Error:", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

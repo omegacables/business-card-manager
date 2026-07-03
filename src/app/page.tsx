@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Contact, ScanText, MessageCircle, FileDown, ShieldCheck, type LucideIcon } from "lucide-react";
 
 function HomeContent() {
   const [error, setError] = useState<string | null>(null);
@@ -56,22 +57,25 @@ function HomeContent() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="animate-pulse text-gray-600 dark:text-gray-300">読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">読み込み中...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 px-4 py-8">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-8">
       <main className="w-full max-w-md space-y-8">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            <Contact className="w-7 h-7" strokeWidth={1.8} />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
             名刺管理Bot
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            名刺をスキャンして簡単管理
+          <p className="text-muted-foreground leading-relaxed">
+            LINEで送るだけ。大切なご縁を、きちんと管理。
           </p>
         </div>
 
@@ -112,7 +116,7 @@ function HomeContent() {
             {/* Google Login */}
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg border border-gray-300 transition-colors disabled:opacity-50 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-card hover:bg-accent text-foreground font-medium rounded-lg border border-border transition-colors disabled:opacity-50"
               onClick={handleGoogleLogin}
               disabled={lineLoading || googleLoading}
             >
@@ -138,30 +142,48 @@ function HomeContent() {
         </Card>
 
         {/* Features */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <FeatureCard
+            icon={ScanText}
             title="OCR読み取り"
             description="名刺の写真から自動で情報を抽出"
           />
           <FeatureCard
+            icon={MessageCircle}
             title="LINE連携"
             description="LINEで写真を送るだけで登録"
           />
           <FeatureCard
-            title="簡単エクスポート"
+            icon={FileDown}
+            title="エクスポート"
             description="vCardやCSVで連絡先を出力"
           />
         </div>
+
+        {/* Trust note */}
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="w-3.5 h-3.5" strokeWidth={1.8} />
+          通信はすべて暗号化され、名刺データはご本人のみ閲覧できます
+        </p>
       </main>
     </div>
   );
 }
 
-function FeatureCard({ title, description }: { title: string; description: string }) {
+function FeatureCard({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
   return (
-    <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700">
-      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{title}</h3>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{description}</p>
+    <div className="p-4 bg-card rounded-xl shadow-sm border border-border">
+      <Icon className="w-5 h-5 text-primary mb-2" strokeWidth={1.8} />
+      <h3 className="font-semibold text-foreground text-sm">{title}</h3>
+      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
     </div>
   );
 }
@@ -169,8 +191,8 @@ function FeatureCard({ title, description }: { title: string; description: strin
 export default function Home() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="animate-pulse text-gray-600 dark:text-gray-300">読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">読み込み中...</div>
       </div>
     }>
       <HomeContent />

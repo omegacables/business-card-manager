@@ -16,7 +16,6 @@ export default function SettingsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
-  const [lineUserId, setLineUserId] = useState("");
   const [currentLineUserId, setCurrentLineUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
@@ -71,7 +70,6 @@ export default function SettingsPage() {
           setNewEmail(data.profile?.email || data.user?.email || "");
           if (data.profile?.line_user_id) {
             setCurrentLineUserId(data.profile.line_user_id);
-            setLineUserId(data.profile.line_user_id);
           }
         }
       } catch (error) {
@@ -81,7 +79,7 @@ export default function SettingsPage() {
     fetchProfile();
   }, []);
 
-  const handleSave = async () => {
+  const handleUnlink = async () => {
     if (!userId) {
       toast.error("認証エラー");
       return;
@@ -92,25 +90,18 @@ export default function SettingsPage() {
       const res = await fetch("/api/profile/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ line_user_id: lineUserId || null }),
+        body: JSON.stringify({ line_user_id: null }),
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Update error:", errorData);
-        if (errorData.error === "line_already_linked") {
-          toast.error("このLINE IDは既に別のアカウントに紐づいています");
-          setLoading(false);
-          return;
-        }
-        throw new Error(errorData.details || "Update failed");
+        throw new Error("Update failed");
       }
 
-      setCurrentLineUserId(lineUserId || null);
-      toast.success("設定を保存しました");
+      setCurrentLineUserId(null);
+      toast.success("LINE連携を解除しました");
     } catch (error) {
       console.error(error);
-      toast.error(`保存に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error("連携の解除に失敗しました");
     } finally {
       setLoading(false);
     }
@@ -217,7 +208,7 @@ export default function SettingsPage() {
             LINE連携
           </CardTitle>
           <CardDescription>
-            LINE Botから名刺を登録するには、LINEユーザーIDを設定してください。
+            LINEアカウントを連携すると、LINEで名刺の写真を送るだけで登録できます。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -248,7 +239,7 @@ export default function SettingsPage() {
           {lineOfficialUrl && (
             <div className="p-4 bg-muted rounded-lg">
               <h3 className="font-medium text-foreground mb-3">
-                {currentLineUserId ? "LINE公式アカウント" : "Step 1: 公式アカウントを友だち追加"}
+                LINE公式アカウントを友だち追加
               </h3>
               <a
                 href={lineOfficialUrl}
@@ -264,49 +255,29 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* LINE ID設定 */}
-          <div className="p-4 bg-muted rounded-lg">
-            <h3 className="font-medium text-foreground mb-3">
-              {lineOfficialUrl ? "Step 2: " : ""}LINE ユーザーIDを設定
-            </h3>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="lineUserId">LINE ユーザーID</Label>
-                <Input
-                  id="lineUserId"
-                  value={lineUserId}
-                  onChange={(e) => setLineUserId(e.target.value)}
-                  placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  className="font-mono"
-                />
-                <p className="text-sm text-muted-foreground">
-                  LINEで「id」と送信するとユーザーIDを確認できます。
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Button onClick={handleSave} disabled={loading}>
-                  {loading ? "保存中..." : "保存"}
+          {/* 連携状態 */}
+          {currentLineUserId && (
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  LINE連携済み
+                </span>
+                <Button variant="outline" onClick={handleUnlink} disabled={loading}>
+                  {loading ? "解除中..." : "連携を解除"}
                 </Button>
-                {currentLineUserId && (
-                  <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    連携済み
-                  </span>
-                )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* 使い方 */}
           <div className="p-4 border border-border rounded-lg">
             <h3 className="font-medium text-foreground mb-3">使い方</h3>
             <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              <li>上の「友だち追加」ボタンからLINE公式アカウントを追加</li>
-              <li>LINEで「id」と送信してユーザーIDを取得</li>
-              <li>取得したIDを上の入力欄に貼り付けて保存</li>
+              <li>「LINEと連携する」ボタンからLINEアカウントを連携</li>
+              <li>「友だち追加」ボタンからLINE公式アカウントを追加</li>
               <li>LINEで名刺の写真を送信すると自動で登録されます</li>
             </ol>
           </div>

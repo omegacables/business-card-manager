@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { randomUUID } from "crypto";
+import { logger, maskEmail, maskId } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest) {
 
     const authSub = session.user.sub;
     const authName = session.user.name;
+    const authEmail = session.user.email;
 
     const body = await request.json();
     const { email, display_name } = body;
@@ -21,8 +23,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    console.log("[Onboarding] Auth sub:", authSub);
-    console.log("[Onboarding] Submitted email:", email);
+    logger.log("[Onboarding] Auth sub:", maskId(authSub));
+    logger.log("[Onboarding] Submitted email:", maskEmail(email));
 
     const supabase = createAdminClient();
 
@@ -41,8 +43,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "email_exists" }, { status: 409 });
       }
 
+      // Linking to an existing profile is only allowed when the session itself
+      // proves ownership of that email (e.g. Google login). A LINE-only session
+      // has no verified email, so accepting a typed-in address here would let an
+      // attacker take over any unlinked profile and read its cards via LINE Bot.
+      if (email !== authEmail) {
+        return NextResponse.json({ error: "email_exists" }, { status: 409 });
+      }
+
       // Profile exists but no LINE - link this LINE account to it
-      console.log("[Onboarding] Linking LINE to existing profile:", email, "profile id:", existingProfile.id);
+      logger.log("[Onboarding] Linking LINE to existing profile:", maskEmail(email), "profile id:", maskId(existingProfile.id));
 
       // Extract LINE user ID from auth sub (format: line|Uxxxxxx)
       const lineUserId = authSub.startsWith("line|") ? authSub.replace("line|", "") : null;
@@ -57,7 +67,7 @@ export async function POST(request: NextRequest) {
           .eq("id", existingProfile.id);
 
         if (updateError) {
-          console.error("[Onboarding] Update error:", JSON.stringify(updateError));
+          logger.error("[Onboarding] Update error:", JSON.stringify(updateError));
           return NextResponse.json({ error: "Failed to link account" }, { status: 500 });
         }
       }
@@ -66,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // No existing profile - create new one
-    console.log("[Onboarding] Creating new profile for:", email);
+    logger.log("[Onboarding] Creating new profile for:", maskEmail(email));
 
     // Extract LINE user ID from auth sub
     const lineUserId = authSub.startsWith("line|") ? authSub.replace("line|", "") : null;
@@ -80,7 +90,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (insertError) {
-      console.error("[Onboarding] Insert error:", JSON.stringify(insertError));
+      logger.error("[Onboarding] Insert error:", JSON.stringify(insertError));
       // Check if it's a unique constraint error
       if (insertError.code === "23505") {
         return NextResponse.json({ error: "email_exists" }, { status: 409 });
@@ -97,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, created: true });
   } catch (error) {
-    console.error("[Onboarding] Error:", error);
+    logger.error("[Onboarding] Error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

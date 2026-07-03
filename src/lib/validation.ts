@@ -57,7 +57,7 @@ export type CardInput = z.infer<typeof cardInputSchema>;
 // Removes metacharacters that could break out of `.or()` / `.ilike()` filters.
 export function sanitizeSearchQuery(raw: string): string {
   return raw
-    .replace(/[,()%\\]/g, "")
+    .replace(/[,()*%\\]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 100);

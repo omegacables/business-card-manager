@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { randomUUID } from "crypto";
+import { logger, maskEmail, maskId } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,9 +29,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
 
-    console.log("[UpdateEmail] Auth sub:", authSub);
-    console.log("[UpdateEmail] Current auth email:", currentAuthEmail);
-    console.log("[UpdateEmail] New email:", email);
+    logger.log("[UpdateEmail] Auth sub:", maskId(authSub));
+    logger.log("[UpdateEmail] Current auth email:", maskEmail(currentAuthEmail));
+    logger.log("[UpdateEmail] New email:", maskEmail(email));
 
     const supabase = createAdminClient();
 
@@ -44,47 +45,44 @@ export async function POST(request: NextRequest) {
     // Extract LINE user ID if this is a LINE user
     const lineUserId = authSub.startsWith("line|") ? authSub.replace("line|", "") : null;
 
-    console.log("[UpdateEmail] LINE user ID:", lineUserId);
-    console.log("[UpdateEmail] Existing profile:", existingProfile);
+    logger.log("[UpdateEmail] LINE user ID:", maskId(lineUserId));
+    logger.log("[UpdateEmail] Existing profile:", maskId(existingProfile?.id));
 
     // If email already exists in a profile
     if (existingProfile) {
       // Case 1: This LINE user is already linked to this profile
       if (lineUserId && existingProfile.line_user_id === lineUserId) {
-        console.log("[UpdateEmail] Already linked to this profile");
+        logger.log("[UpdateEmail] Already linked to this profile");
         return NextResponse.json({ success: true, unchanged: true });
       }
 
-      // Case 2: Profile has a different LINE user linked - reject
-      if (existingProfile.line_user_id && lineUserId && existingProfile.line_user_id !== lineUserId) {
-        console.log("[UpdateEmail] Profile has different LINE user linked");
-        return NextResponse.json({ error: "email_exists" }, { status: 409 });
+      // Case 2: Same email as auth email - no change needed
+      if (currentAuthEmail && existingProfile.email === currentAuthEmail) {
+        logger.log("[UpdateEmail] Same as current auth email");
+        return NextResponse.json({ success: true, unchanged: true });
       }
 
-      // Case 3: Profile has no LINE linked and current user is LINE user - link them!
-      if (!existingProfile.line_user_id && lineUserId) {
-        console.log("[UpdateEmail] Linking LINE to existing profile:", email, "profile id:", existingProfile.id);
+      // Case 3: Linking the current LINE session to an existing profile is only
+      // allowed when the session proves ownership of that email address.
+      // A typed-in address is NOT proof — accepting it would let an attacker
+      // take over any unlinked profile and read its cards via LINE Bot.
+      if (!existingProfile.line_user_id && lineUserId && currentAuthEmail === email) {
+        logger.log("[UpdateEmail] Linking LINE to existing profile:", maskEmail(email), "profile id:", maskId(existingProfile.id));
         const { error: updateError } = await supabase
           .from("profiles")
           .update({ line_user_id: lineUserId })
           .eq("id", existingProfile.id);
 
         if (updateError) {
-          console.error("[UpdateEmail] Link error:", JSON.stringify(updateError));
+          logger.error("[UpdateEmail] Link error:", JSON.stringify(updateError));
           return NextResponse.json({ error: "Failed to link account" }, { status: 500 });
         }
 
         return NextResponse.json({ success: true, linked: true });
       }
 
-      // Case 4: Same email as auth email - no change needed
-      if (currentAuthEmail && existingProfile.email === currentAuthEmail) {
-        console.log("[UpdateEmail] Same as current auth email");
-        return NextResponse.json({ success: true, unchanged: true });
-      }
-
       // Other cases - email is taken
-      console.log("[UpdateEmail] Email is taken by another user");
+      logger.log("[UpdateEmail] Email is taken by another user");
       return NextResponse.json({ error: "email_exists" }, { status: 409 });
     }
 
@@ -113,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     if (currentProfile) {
       // Update existing profile's email
-      console.log("[UpdateEmail] Updating profile email from", currentProfile.email, "to", email);
+      logger.log("[UpdateEmail] Updating profile email from", maskEmail(currentProfile.email), "to", maskEmail(email));
       const { error: updateError } = await supabase
         .from("profiles")
         .update({
@@ -123,7 +121,7 @@ export async function POST(request: NextRequest) {
         .eq("id", currentProfile.id);
 
       if (updateError) {
-        console.error("[UpdateEmail] Update error:", JSON.stringify(updateError));
+        logger.error("[UpdateEmail] Update error:", JSON.stringify(updateError));
         if (updateError.code === "23505") {
           return NextResponse.json({ error: "email_exists" }, { status: 409 });
         }
@@ -134,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     // No existing profile - create new one
-    console.log("[UpdateEmail] Creating new profile for:", email);
+    logger.log("[UpdateEmail] Creating new profile for:", maskEmail(email));
     const newId = randomUUID();
 
     const { error: insertError } = await supabase.from("profiles").insert({
@@ -145,7 +143,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (insertError) {
-      console.error("[UpdateEmail] Insert error:", JSON.stringify(insertError));
+      logger.error("[UpdateEmail] Insert error:", JSON.stringify(insertError));
       if (insertError.code === "23505") {
         return NextResponse.json({ error: "email_exists" }, { status: 409 });
       }
@@ -161,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, created: true });
   } catch (error) {
-    console.error("[UpdateEmail] Error:", error);
+    logger.error("[UpdateEmail] Error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
