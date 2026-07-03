@@ -94,10 +94,20 @@ export default async function CardsPage({
             <p className="text-destructive">エラーが発生しました</p>
           ) : cards && cards.length > 0 ? (
             <CardList cards={cards} />
-          ) : (
+          ) : q ? (
             <p className="text-muted-foreground text-center py-8">
-              {q ? "検索結果がありません" : "名刺がまだ登録されていません"}
+              検索結果がありません
             </p>
+          ) : (
+            <div className="text-center py-10 space-y-4">
+              <p className="text-muted-foreground">
+                名刺がまだ登録されていません。<br className="sm:hidden" />
+                最初の1枚を登録してみましょう。
+              </p>
+              <Link href="/cards/new">
+                <Button>名刺を登録する</Button>
+              </Link>
+            </div>
           )}
         </CardContent>
       </Card>

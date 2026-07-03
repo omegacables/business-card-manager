@@ -27,23 +27,30 @@ export function CardList({ cards }: { cards: BusinessCard[] }) {
         </TableHeader>
         <TableBody>
           {cards.map((card) => (
-            <TableRow key={card.id}>
+            <TableRow key={card.id} className="hover:bg-accent/50">
               <TableCell>
                 <Link
                   href={`/cards/${card.id}`}
-                  className="font-medium text-primary hover:underline"
+                  className="flex items-center gap-3"
                 >
-                  {card.name}
+                  <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-full bg-primary/10 text-primary text-sm font-bold">
+                    {(card.name || "?").charAt(0)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-medium text-primary hover:underline truncate">
+                      {card.name}
+                    </span>
+                    <span className="block text-sm text-muted-foreground sm:hidden truncate">
+                      {card.company_name}
+                    </span>
+                  </span>
                 </Link>
-                <p className="text-sm text-muted-foreground sm:hidden">
-                  {card.company_name}
-                </p>
               </TableCell>
               <TableCell className="hidden sm:table-cell">{card.company_name || "-"}</TableCell>
               <TableCell className="hidden md:table-cell">{card.position || "-"}</TableCell>
               <TableCell className="hidden lg:table-cell">{card.email || "-"}</TableCell>
               <TableCell className="hidden sm:table-cell">{card.phone || card.mobile || "-"}</TableCell>
-              <TableCell className="hidden md:table-cell">
+              <TableCell className="hidden md:table-cell tabular-nums text-muted-foreground">
                 {new Date(card.created_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}
               </TableCell>
             </TableRow>

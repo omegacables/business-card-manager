@@ -1,10 +1,13 @@
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import type { BusinessCard } from "@/types/database";
 import { getUserSubscription } from "@/lib/subscription";
+import { getCurrentYearMonth } from "@/lib/plans";
 import { redirect } from "next/navigation";
+import { Contact, CalendarPlus, Gem, PlusCircle, ChevronRight } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await auth0.getSession();
@@ -61,8 +64,16 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(5);
 
+  const { data: usage } = await supabase
+    .from("monthly_usage")
+    .select("cards_registered")
+    .eq("user_id", userId)
+    .eq("year_month", getCurrentYearMonth())
+    .single();
+
   const recentCards = (data || []) as BusinessCard[];
   const isPro = subscription?.plan === "pro";
+  const monthlyCount = usage?.cards_registered ?? 0;
 
   return (
     <div className="space-y-6">
@@ -79,40 +90,90 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Contact className="w-4 h-4 text-primary" strokeWidth={1.8} />
               登録済み名刺
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-foreground">{cardCount ?? 0}</p>
+            <p className="text-3xl font-bold text-foreground tabular-nums">
+              {cardCount ?? 0}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">件</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <CalendarPlus className="w-4 h-4 text-primary" strokeWidth={1.8} />
+              今月の登録
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-foreground tabular-nums">
+              {monthlyCount}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">件</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="col-span-2 md:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Gem className="w-4 h-4 text-primary" strokeWidth={1.8} />
+              ご利用プラン
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-end justify-between gap-2">
+            <p className="text-3xl font-bold text-foreground">{isPro ? "Pro" : "Free"}</p>
+            {!isPro && (
+              <Link
+                href="/pricing"
+                className="inline-flex items-center text-sm text-primary hover:underline"
+              >
+                アップグレード
+                <ChevronRight className="w-4 h-4" strokeWidth={1.8} />
+              </Link>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>最近登録した名刺</CardTitle>
+          {recentCards.length > 0 && (
+            <Link
+              href="/cards"
+              className="inline-flex items-center text-sm text-primary hover:underline"
+            >
+              すべて見る
+              <ChevronRight className="w-4 h-4" strokeWidth={1.8} />
+            </Link>
+          )}
         </CardHeader>
         <CardContent>
           {recentCards.length > 0 ? (
-            <ul className="space-y-3">
+            <ul className="divide-y divide-border">
               {recentCards.map((card) => (
                 <li key={card.id}>
                   <Link
                     href={'/cards/' + card.id}
-                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-accent transition-colors"
+                    className="flex items-center gap-4 p-3 -mx-3 rounded-lg hover:bg-accent transition-colors"
                   >
-                    <div className="flex-1">
-                      <p className="font-medium text-foreground">{card.name}</p>
-                      <p className="text-sm text-muted-foreground">
+                    <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-full bg-primary/10 text-primary font-bold">
+                      {(card.name || "?").charAt(0)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{card.name}</p>
+                      <p className="text-sm text-muted-foreground truncate">
                         {card.company_name}
                         {card.position && ' - ' + card.position}
                       </p>
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground tabular-nums shrink-0">
                       {new Date(card.created_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}
                     </span>
                   </Link>
@@ -120,9 +181,18 @@ export default async function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-muted-foreground text-center py-8">
-              名刺がまだ登録されていません
-            </p>
+            <div className="text-center py-10 space-y-4">
+              <p className="text-muted-foreground">
+                名刺がまだ登録されていません。<br className="sm:hidden" />
+                最初の1枚を登録してみましょう。
+              </p>
+              <Link href="/cards/new">
+                <Button className="gap-2">
+                  <PlusCircle className="w-4 h-4" strokeWidth={1.8} />
+                  名刺を登録する
+                </Button>
+              </Link>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -11,6 +11,7 @@ import {
   PlusCircle,
   Settings,
   Gem,
+  IdCard,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -89,7 +90,12 @@ export function Sidebar({ user }: { user: AppUser }) {
         }`}
       >
         <div className="p-4 border-b border-border">
-          <h1 className="text-xl font-bold text-foreground">名刺管理</h1>
+          <h1 className="flex items-center gap-2.5 text-lg font-bold text-foreground">
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground">
+              <IdCard className="w-4.5 h-4.5" strokeWidth={1.8} />
+            </span>
+            名刺管理
+          </h1>
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
