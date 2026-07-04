@@ -29,7 +29,8 @@
 
 ## 残課題（優先度順）
 
-1. **本番Supabaseで migration 003 適用済みか実機確認**（storage.buckets.public=false）— コードからは検証不能
+1. ~~本番Supabaseで migration 003 適用済みか実機確認~~ → **確認済み（2026-07-04）**: card-images バケットは public=false。適用済み。
+   なお確認の過程で **本番スキーマのドリフト** が発覚: profiles.id が本番ではTEXT型（移行ファイルはUUID）。migration 004 は型自動検出で対応済みだが、いずれ本番スキーマのダンプ→移行ファイルの棚卸しを推奨
 2. **LINE Webhook経路のusage更新が非atomic**（`webhook/line/route.ts` 136-155, 205-215）— RPC `increment_card_usage` への置換要。並行送信で月次上限超過の可能性
 3. **CSVエクスポートの数式インジェクション**（`src/lib/export.ts` escapeCSV）— 先頭 `= + - @` の無害化（`'` 前置）追加要。OCR由来データのため細工名刺で攻撃可能
 4. **レート制限なし** — 最低限 /api/ocr と認証系へ（Upstash等）
