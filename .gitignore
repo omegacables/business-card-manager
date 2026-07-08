@@ -1,4 +1,3 @@
-cat > .gitignore << 'EOF'
 # Dependencies
 node_modules/
 
@@ -14,6 +13,7 @@ out/
 # Build
 build/
 dist/
+tsconfig.tsbuildinfo
 
 # Debug
 npm-debug.log*
@@ -28,7 +28,12 @@ Thumbs.db
 
 # Google credentials
 *-credentials.json
-EOF
+
+# Vercel
 .vercel
-.env*.local
-tsconfig.tsbuildinfo
+
+# Internal docs (kept local, not published)
+CODE_REVIEW.md
+QA_CHECKLIST.md
+SECURITY_CRITICAL.md
+SECURITY_STATUS_*.md

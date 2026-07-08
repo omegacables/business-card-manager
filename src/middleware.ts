@@ -15,10 +15,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error("Auth0 middleware error:", error);
-    return NextResponse.json(
-      { error: "Authentication error", message: String(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Authentication error" }, { status: 500 });
   }
 }
 
