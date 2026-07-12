@@ -4,7 +4,7 @@
  */
 
 import { auth0 } from "@/lib/auth0";
-import { createAdminClient } from "@/lib/auth";
+import { createAdminClient, auth0IssuerBaseUrl } from "@/lib/auth";
 
 type SessionShape = {
   user: { email?: string; sub?: string };
@@ -51,4 +51,54 @@ export async function getUserProfileIdFromSession(
 export async function getCurrentProfileId(): Promise<string | null> {
   const session = await auth0.getSession();
   return getUserProfileIdFromSession(session);
+}
+
+export interface BearerUser {
+  email?: string | null;
+  sub?: string | null;
+  name?: string | null;
+  picture?: string | null;
+}
+
+/**
+ * iOSアプリが渡す Bearer トークンからユーザー情報を取得する。
+ *  - Google/LINE: Auth0 の access_token → Auth0 /userinfo で検証
+ *  - Apple: Supabase の access_token → supabase.auth.getUser で検証
+ * どちらでもなければ null。
+ */
+export async function getBearerUser(token: string): Promise<BearerUser | null> {
+  // 1) Auth0（Google/LINE）
+  const issuer = auth0IssuerBaseUrl();
+  const res = await fetch(`${issuer}/userinfo`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.ok) {
+    const u = await res.json();
+    return { email: u.email, sub: u.sub, name: u.name, picture: u.picture };
+  }
+
+  // 2) Supabase（Apple）
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.auth.getUser(token);
+  if (!error && data.user) {
+    const u = data.user;
+    const meta = u.user_metadata || {};
+    return {
+      email: u.email ?? null,
+      sub: `apple|${u.id}`,
+      name: meta.full_name || meta.name || null,
+      picture: meta.avatar_url || meta.picture || null,
+    };
+  }
+
+  return null;
+}
+
+/** Bearer トークンからプロフィールIDを解決（未認証/プロフィール無しは null）。 */
+export async function getProfileIdFromBearer(token: string): Promise<string | null> {
+  const user = await getBearerUser(token);
+  if (!user) return null;
+  return getUserProfileIdFromSession({
+    user: { email: user.email ?? undefined, sub: user.sub ?? undefined },
+  });
 }

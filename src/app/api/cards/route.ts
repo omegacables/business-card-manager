@@ -1,9 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/auth";
 import { incrementCardUsage } from "@/lib/subscription";
-import { getCurrentProfileId } from "@/lib/user";
+import { getCurrentProfileId, getProfileIdFromBearer } from "@/lib/user";
 import { cardInputSchema } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+
+// 名刺一覧を返す。iOSアプリは Authorization: Bearer <token>、Webは Cookie セッションで認証。
+// 各カードは business_cards の全カラム（cardInputSchema の snake_case 項目 + id, created_at 等）を含む。
+export async function GET(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get("authorization");
+    const userId = authHeader?.startsWith("Bearer ")
+      ? await getProfileIdFromBearer(authHeader.slice("Bearer ".length).trim())
+      : await getCurrentProfileId();
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("business_cards")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      logger.error("[cards] list error", error.message);
+      return NextResponse.json(
+        { error: "名刺の取得に失敗しました" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ cards: data ?? [] });
+  } catch (error) {
+    logger.error("[cards] unexpected error", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

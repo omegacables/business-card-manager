@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { createAdminClient, auth0IssuerBaseUrl } from "@/lib/auth";
+import { createAdminClient } from "@/lib/auth";
+import { getBearerUser } from "@/lib/user";
 import { randomUUID } from "crypto";
 
 interface ResolveInput {
@@ -126,44 +127,14 @@ async function resolveUser({ email: userEmail, sub: userSub, name: userName, pic
   });
 }
 
-// Bearer トークンを検証する。iOSアプリは2種類のトークンを渡しうる:
-//  - Google/LINE: Auth0 の access_token → Auth0 /userinfo で検証
-//  - Apple: Supabase の access_token → supabase.auth.getUser で検証
-async function getUserFromBearer(token: string): Promise<ResolveInput | null> {
-  // 1) Auth0（Google/LINE）
-  const issuer = auth0IssuerBaseUrl();
-  const res = await fetch(`${issuer}/userinfo`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.ok) {
-    const u = await res.json();
-    return { email: u.email, sub: u.sub, name: u.name, picture: u.picture };
-  }
-
-  // 2) Supabase（Apple）
-  const supabase = createAdminClient();
-  const { data, error } = await supabase.auth.getUser(token);
-  if (!error && data.user) {
-    const u = data.user;
-    const meta = u.user_metadata || {};
-    return {
-      email: u.email ?? null,
-      sub: `apple|${u.id}`,
-      name: meta.full_name || meta.name || null,
-      picture: meta.avatar_url || meta.picture || null,
-    };
-  }
-
-  return null;
-}
-
 export async function GET(request: NextRequest) {
   try {
     // 1) iOSアプリ: Authorization: Bearer <access_token>
+    //    Google/LINE=Auth0トークン, Apple=Supabaseトークン（getBearerUserが両対応）
     const authHeader = request.headers.get("authorization");
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.slice("Bearer ".length).trim();
-      const userInfo = await getUserFromBearer(token);
+      const userInfo = await getBearerUser(token);
       if (!userInfo) {
         return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
       }
