@@ -5,11 +5,17 @@ import { checkCanRegisterCard, checkCanSaveImage } from "@/lib/subscription";
 import { validateOcrFile } from "@/lib/validation";
 import { uploadCardImage } from "@/lib/storage";
 import { logger } from "@/lib/logger";
+import { getBearerUser } from "@/lib/user";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await auth0.getSession();
-    const userEmail = session?.user?.email;
+    let userEmail = session?.user?.email ?? null;
+
+    if (!userEmail) {
+      const bearer = await getBearerUser();
+      userEmail = bearer?.email ?? null;
+    }
 
     if (!userEmail) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

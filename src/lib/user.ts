@@ -1,20 +1,26 @@
 /**
  * Centralized user profile lookup helpers.
- * Previously duplicated across 5+ API route files; consolidated here.
+ * 認証は2方式に対応:
+ * 1. Auth0のCookieセッション（Webブラウザ）
+ * 2. `Authorization: Bearer <Supabaseアクセストークン>`（モバイルアプリ）
  */
 
+import { headers } from "next/headers";
 import { auth0 } from "@/lib/auth0";
-import { createAdminClient, auth0IssuerBaseUrl } from "@/lib/auth";
+import { createAdminClient } from "@/lib/auth";
 
 type SessionShape = {
   user: { email?: string; sub?: string };
 } | null | undefined;
 
-/**
- * Resolve the current user's profile id from the Auth0 session.
- * Looks up by email first, then by LINE user id as a fallback.
- * Returns null if no profile is found or the user isn't authenticated.
- */
+export type BearerUser = {
+  authUserId: string;
+  email: string | null;
+  name: string | null;
+  picture: string | null;
+  lineUserId: string | null;
+};
+
 export async function getUserProfileIdFromSession(
   session: SessionShape
 ): Promise<string | null> {
@@ -47,58 +53,71 @@ export async function getUserProfileIdFromSession(
   return null;
 }
 
-/** Shortcut that fetches the Auth0 session internally. */
-export async function getCurrentProfileId(): Promise<string | null> {
-  const session = await auth0.getSession();
-  return getUserProfileIdFromSession(session);
-}
+/** BearerトークンからSupabaseユーザーを解決する（無効なら null）。 */
+export async function getBearerUser(): Promise<BearerUser | null> {
+  const headerList = await headers();
+  const authHeader = headerList.get("authorization") ?? "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) return null;
 
-export interface BearerUser {
-  email?: string | null;
-  sub?: string | null;
-  name?: string | null;
-  picture?: string | null;
-}
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
 
-/**
- * iOSアプリが渡す Bearer トークンからユーザー情報を取得する。
- *  - Google/LINE: Auth0 の access_token → Auth0 /userinfo で検証
- *  - Apple: Supabase の access_token → supabase.auth.getUser で検証
- * どちらでもなければ null。
- */
-export async function getBearerUser(token: string): Promise<BearerUser | null> {
-  // 1) Auth0（Google/LINE）
-  const issuer = auth0IssuerBaseUrl();
-  const res = await fetch(`${issuer}/userinfo`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.ok) {
-    const u = await res.json();
-    return { email: u.email, sub: u.sub, name: u.name, picture: u.picture };
-  }
-
-  // 2) Supabase（Apple）
   const supabase = createAdminClient();
   const { data, error } = await supabase.auth.getUser(token);
-  if (!error && data.user) {
-    const u = data.user;
-    const meta = u.user_metadata || {};
-    return {
-      email: u.email ?? null,
-      sub: `apple|${u.id}`,
-      name: meta.full_name || meta.name || null,
-      picture: meta.avatar_url || meta.picture || null,
-    };
+  if (error || !data?.user) return null;
+
+  const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+  return {
+    authUserId: data.user.id,
+    email: data.user.email ?? null,
+    name: typeof meta.display_name === "string" ? meta.display_name : null,
+    picture: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+    lineUserId: typeof meta.line_user_id === "string" ? meta.line_user_id : null,
+  };
+}
+
+/** Bearerユーザーのプロフィールを id → email → line_user_id の順で検索。 */
+export async function getProfileIdForBearerUser(
+  user: BearerUser
+): Promise<string | null> {
+  const supabase = createAdminClient();
+
+  const { data: byId } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.authUserId)
+    .single();
+  if (byId?.id) return byId.id;
+
+  if (user.email) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", user.email)
+      .single();
+    if (data?.id) return data.id;
+  }
+
+  if (user.lineUserId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("line_user_id", user.lineUserId)
+      .single();
+    if (data?.id) return data.id;
   }
 
   return null;
 }
 
-/** Bearer トークンからプロフィールIDを解決（未認証/プロフィール無しは null）。 */
-export async function getProfileIdFromBearer(token: string): Promise<string | null> {
-  const user = await getBearerUser(token);
-  if (!user) return null;
-  return getUserProfileIdFromSession({
-    user: { email: user.email ?? undefined, sub: user.sub ?? undefined },
-  });
+/** Auth0セッション（Web）または Bearerトークン（モバイル）からプロフィールIDを解決。 */
+export async function getCurrentProfileId(): Promise<string | null> {
+  const session = await auth0.getSession();
+  const fromSession = await getUserProfileIdFromSession(session);
+  if (fromSession) return fromSession;
+
+  const bearer = await getBearerUser();
+  if (bearer) return getProfileIdForBearerUser(bearer);
+
+  return null;
 }

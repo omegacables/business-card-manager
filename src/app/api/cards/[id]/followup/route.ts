@@ -3,6 +3,7 @@ import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import { draftFollowUpEmail, type FollowUpTone } from "@/lib/ai";
 import { logger } from "@/lib/logger";
+import { getBearerUser, getProfileIdForBearerUser } from "@/lib/user";
 import type { Activity } from "@/types/database";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -20,35 +21,49 @@ export async function POST(
 ) {
   try {
     const session = await auth0.getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const supabase = createAdminClient();
 
-    // Resolve profile (email or LINE id)
-    const userEmail = session.user.email;
-    const lineUserId = session.user.sub?.startsWith("line|")
-      ? session.user.sub.replace("line|", "")
-      : null;
-
     let profile: { id: string; display_name: string | null } | null = null;
-    if (userEmail) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .eq("email", userEmail)
-        .single();
-      profile = data;
+
+    if (session) {
+      const userEmail = session.user.email;
+      const lineUserId = session.user.sub?.startsWith("line|")
+        ? session.user.sub.replace("line|", "")
+        : null;
+
+      if (userEmail) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, display_name")
+          .eq("email", userEmail)
+          .single();
+        profile = data;
+      }
+      if (!profile && lineUserId) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, display_name")
+          .eq("line_user_id", lineUserId)
+          .single();
+        profile = data;
+      }
     }
-    if (!profile && lineUserId) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .eq("line_user_id", lineUserId)
-        .single();
-      profile = data;
+
+    if (!profile) {
+      const bearer = await getBearerUser();
+      if (bearer) {
+        const profileId = await getProfileIdForBearerUser(bearer);
+        if (profileId) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, display_name")
+            .eq("id", profileId)
+            .single();
+          profile = data;
+        }
+      }
     }
+
     if (!profile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

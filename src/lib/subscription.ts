@@ -1,38 +1,12 @@
-import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
 import type { Plan, Subscription, MonthlyUsage } from "@/types/database";
 import { getCurrentYearMonth, canSaveImage, getPlanLimits } from "@/lib/plans";
 import { logger } from "@/lib/logger";
+import { getCurrentProfileId } from "@/lib/user";
 
-// Helper to get user's profile ID (used only inside this file).
+// Helper to get user's profile ID (Auth0 session or mobile Bearer token).
 async function getUserProfileId(): Promise<string | null> {
-  const session = await auth0.getSession();
-  if (!session) return null;
-
-  const supabase = createAdminClient();
-  const userEmail = session.user.email;
-  const lineUserId = session.user.sub?.startsWith("line|")
-    ? session.user.sub.replace("line|", "")
-    : null;
-
-  let profile = null;
-  if (userEmail) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", userEmail)
-      .single();
-    profile = data;
-  }
-  if (!profile && lineUserId) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("line_user_id", lineUserId)
-      .single();
-    profile = data;
-  }
-  return profile?.id || null;
+  return getCurrentProfileId();
 }
 
 export async function getUserSubscription(): Promise<Subscription | null> {

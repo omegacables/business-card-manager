@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/auth";
-import { getBearerUser } from "@/lib/user";
+import { getBearerUser, getProfileIdForBearerUser } from "@/lib/user";
 import { randomUUID } from "crypto";
 
 interface ResolveInput {
@@ -11,8 +11,7 @@ interface ResolveInput {
   picture?: string | null;
 }
 
-// Cookie セッション（Web）でも Bearer トークン（iOS）でも、
-// 同じユーザー情報から profile を引く／作る共通処理。
+// Auth0 Cookie セッション（Web）のユーザー情報から profile を引く／作る共通処理。
 async function resolveUser({ email: userEmail, sub: userSub, name: userName, picture: userPicture }: ResolveInput) {
   // Extract LINE user ID if this is a LINE login
   const lineUserId = userSub?.startsWith("line|") ? userSub.replace("line|", "") : null;
@@ -127,24 +126,40 @@ async function resolveUser({ email: userEmail, sub: userSub, name: userName, pic
   });
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // 1) iOSアプリ: Authorization: Bearer <access_token>
-    //    Google/LINE=Auth0トークン, Apple=Supabaseトークン（getBearerUserが両対応）
-    const authHeader = request.headers.get("authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.slice("Bearer ".length).trim();
-      const userInfo = await getBearerUser(token);
-      if (!userInfo) {
+    const session = await auth0.getSession();
+
+    if (!session) {
+      // モバイルアプリはSupabaseのBearerトークンで認証する
+      const bearer = await getBearerUser();
+      if (!bearer) {
         return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
       }
-      return resolveUser(userInfo);
-    }
 
-    // 2) Web: Auth0 Cookie セッション
-    const session = await auth0.getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      const supabase = createAdminClient();
+      const profileId = await getProfileIdForBearerUser(bearer);
+
+      let profile = null;
+      if (profileId) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", profileId)
+          .single();
+        profile = data;
+      }
+
+      return NextResponse.json({
+        user: {
+          id: profileId ?? bearer.authUserId,
+          email: profile?.email ?? bearer.email,
+          sub: bearer.lineUserId ? `line|${bearer.lineUserId}` : bearer.authUserId,
+          name: profile?.display_name ?? bearer.name,
+          picture: bearer.picture,
+        },
+        profile,
+      });
     }
 
     return resolveUser({

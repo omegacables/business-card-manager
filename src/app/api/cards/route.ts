@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/auth";
 import { incrementCardUsage } from "@/lib/subscription";
-import { getCurrentProfileId, getProfileIdFromBearer } from "@/lib/user";
+import { getCurrentProfileId } from "@/lib/user";
 import { cardInputSchema } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 
 // 名刺一覧を返す。iOSアプリは Authorization: Bearer <token>、Webは Cookie セッションで認証。
+// （getCurrentProfileId が Auth0セッション/Supabase Bearer の両方を解決する）
 // 各カードは business_cards の全カラム（cardInputSchema の snake_case 項目 + id, created_at 等）を含む。
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const authHeader = request.headers.get("authorization");
-    const userId = authHeader?.startsWith("Bearer ")
-      ? await getProfileIdFromBearer(authHeader.slice("Bearer ".length).trim())
-      : await getCurrentProfileId();
+    const userId = await getCurrentProfileId();
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
