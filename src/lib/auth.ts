@@ -9,6 +9,17 @@ export function createAdminClient() {
   );
 }
 
+// Auth0 の発行者ベースURL（https://<domain>）を返す。
+// SDK v4 は AUTH0_DOMAIN、旧設定/ローカルは AUTH0_ISSUER_BASE_URL を使うため両対応。
+export function auth0IssuerBaseUrl(): string {
+  const domain = process.env.AUTH0_DOMAIN;
+  if (domain) {
+    const d = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    return `https://${d}`;
+  }
+  return (process.env.AUTH0_ISSUER_BASE_URL || "").replace(/\/$/, "");
+}
+
 // Get current user's email (used as user ID)
 export async function getCurrentUserEmail(): Promise<string | null> {
   const session = await auth0.getSession();

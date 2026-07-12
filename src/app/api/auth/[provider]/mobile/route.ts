@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes, createHmac } from "crypto";
+import { auth0IssuerBaseUrl } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
 // アプリの provider 名 -> Auth0 の connection 名
@@ -40,7 +41,7 @@ export async function GET(
     return new NextResponse("Invalid redirect_uri", { status: 400 });
   }
 
-  const issuer = process.env.AUTH0_ISSUER_BASE_URL!;
+  const issuer = auth0IssuerBaseUrl();
   const clientId = process.env.AUTH0_CLIENT_ID!;
   const state = signMobileState({ r: appRedirect, st: appState, p: provider });
   const callback = `${siteBase()}/api/auth/${provider}/mobile/callback`;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { createAdminClient } from "@/lib/auth";
+import { createAdminClient, auth0IssuerBaseUrl } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
 interface ResolveInput {
@@ -128,7 +128,7 @@ async function resolveUser({ email: userEmail, sub: userSub, name: userName, pic
 
 // Bearer トークン（iOSアプリが渡す Auth0 access_token）を userinfo で検証
 async function getUserFromBearer(token: string): Promise<ResolveInput | null> {
-  const issuer = process.env.AUTH0_ISSUER_BASE_URL!;
+  const issuer = auth0IssuerBaseUrl();
   const res = await fetch(`${issuer}/userinfo`, {
     headers: { Authorization: `Bearer ${token}` },
   });

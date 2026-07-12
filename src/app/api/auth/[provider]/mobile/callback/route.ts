@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/auth";
+import { createAdminClient, auth0IssuerBaseUrl } from "@/lib/auth";
 import { randomUUID, createHmac } from "crypto";
 import { logger, maskEmail, maskId } from "@/lib/logger";
 
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const issuer = process.env.AUTH0_ISSUER_BASE_URL!;
+    const issuer = auth0IssuerBaseUrl();
 
     // Auth0 の code を token に交換（confidential client なので client_secret を使用）
     const tokenRes = await fetch(`${issuer}/oauth/token`, {
