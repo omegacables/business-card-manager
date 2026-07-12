@@ -7,7 +7,7 @@
 
 import { headers } from "next/headers";
 import { auth0 } from "@/lib/auth0";
-import { createAdminClient } from "@/lib/auth";
+import { createAdminClient, auth0IssuerBaseUrl } from "@/lib/auth";
 
 type SessionShape = {
   user: { email?: string; sub?: string };
@@ -53,7 +53,68 @@ export async function getUserProfileIdFromSession(
   return null;
 }
 
-/** BearerトークンからSupabaseユーザーを解決する（無効なら null）。 */
+// Auth0 /userinfo の結果をトークン単位で短時間キャッシュする。
+// Auth0 の /userinfo はレート制限が厳しいため、毎APIコールで叩かない。
+const auth0UserInfoCache = new Map<
+  string,
+  { user: BearerUser; expiresAt: number }
+>();
+const AUTH0_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Auth0のアクセストークン（Google等のモバイルOAuthフローが返す）を
+ * /userinfo で検証して BearerUser に解決する。無効なら null。
+ */
+async function getAuth0BearerUser(token: string): Promise<BearerUser | null> {
+  const cached = auth0UserInfoCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) return cached.user;
+
+  const issuer = auth0IssuerBaseUrl();
+  if (!issuer) return null;
+
+  try {
+    const res = await fetch(`${issuer}/userinfo`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+
+    const info = (await res.json()) as {
+      sub?: string;
+      email?: string;
+      name?: string;
+      picture?: string;
+    };
+    if (!info.sub) return null;
+
+    const user: BearerUser = {
+      authUserId: info.sub,
+      email: info.email ?? null,
+      name: info.name ?? null,
+      picture: info.picture ?? null,
+      lineUserId: info.sub.startsWith("line|")
+        ? info.sub.replace("line|", "")
+        : null,
+    };
+
+    auth0UserInfoCache.set(token, {
+      user,
+      expiresAt: Date.now() + AUTH0_CACHE_TTL_MS,
+    });
+    // キャッシュの無限成長を防ぐ
+    if (auth0UserInfoCache.size > 500) {
+      const oldestKey = auth0UserInfoCache.keys().next().value;
+      if (oldestKey) auth0UserInfoCache.delete(oldestKey);
+    }
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bearerトークンからユーザーを解決する（無効なら null）。
+ * Supabaseトークン（LINE/Appleログイン）→ Auth0トークン（Googleログイン）の順に検証。
+ */
 export async function getBearerUser(): Promise<BearerUser | null> {
   const headerList = await headers();
   const authHeader = headerList.get("authorization") ?? "";
@@ -64,16 +125,19 @@ export async function getBearerUser(): Promise<BearerUser | null> {
 
   const supabase = createAdminClient();
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return null;
+  if (!error && data?.user) {
+    const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+    return {
+      authUserId: data.user.id,
+      email: data.user.email ?? null,
+      name: typeof meta.display_name === "string" ? meta.display_name : null,
+      picture: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+      lineUserId: typeof meta.line_user_id === "string" ? meta.line_user_id : null,
+    };
+  }
 
-  const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
-  return {
-    authUserId: data.user.id,
-    email: data.user.email ?? null,
-    name: typeof meta.display_name === "string" ? meta.display_name : null,
-    picture: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
-    lineUserId: typeof meta.line_user_id === "string" ? meta.line_user_id : null,
-  };
+  // Supabaseトークンでなければ、Auth0のアクセストークン（Googleモバイルログイン）として検証
+  return getAuth0BearerUser(token);
 }
 
 /** Bearerユーザーのプロフィールを id → email → line_user_id の順で検索。 */
