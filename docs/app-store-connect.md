@@ -124,7 +124,7 @@ Google / LINE / Apple（Sign in with Apple）ですぐに始められます。
 | （任意）診断・エラー情報 | Diagnostics › Crash/Other Diagnostic Data | App の機能 | あり | サーバーのエラーログ |
 
 **申告しないもの**:
-- クレジットカード番号等の決済情報 → 決済代行（Stripe）が直接取得し、当社アプリは受け取らないため、開発者としては申告不要（Stripe 側で処理）。
+- クレジットカード番号等の決済情報 → iOSはApple社のApp内課金（In-App Purchase）で決済し、購読状態の管理に RevenueCat を利用（Web版は Stripe）。カード情報はApple/Stripeが取得し当社アプリは受け取らないため、開発者としては申告不要。
 - 位置情報・連絡先（端末アドレス帳）・広告識別子（IDFA）→ 使用しません。
 
 ---

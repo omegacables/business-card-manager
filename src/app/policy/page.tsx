@@ -71,7 +71,8 @@ export default function PolicyPage() {
         </p>
         <p className="font-medium text-foreground">(4) 決済情報</p>
         <p>
-          有料プランをご利用の場合、決済代行事業者（Stripe）を通じて決済処理を行います。クレジットカード番号等の決済情報はStripeが取得・管理し、当社はカード番号そのものを保持しません。当社は契約プランや購入・課金状況等を取得します。
+          有料プランをご利用の場合、iOSアプリではApple社のApp内課金（In-App
+          Purchase）を通じて決済が行われ、購読状態の管理にRevenueCatを利用します。Web版では決済代行事業者（Stripe）を利用します。いずれの場合も、クレジットカード番号等の決済情報はApple社またはStripeが取得・管理し、当社はカード番号そのものを保持しません。当社は契約プランや購入・課金状況等を取得します。
         </p>
       </Section>
 
@@ -95,7 +96,8 @@ export default function PolicyPage() {
           <li>Auth0（Okta 社／ログイン認証）</li>
           <li>Google Cloud Vision API（名刺画像の文字認識・OCR）</li>
           <li>Google（Gemini）／OpenAI（名刺項目のAI解析、文面生成）</li>
-          <li>Stripe（決済処理）</li>
+          <li>Apple（iOSアプリのApp内課金）／RevenueCat（購読状態の管理）</li>
+          <li>Stripe（Web版の決済処理）</li>
           <li>LINE（LINEログイン、LINE経由での画像の受け取り）</li>
           <li>Vercel（アプリケーションのホスティング）</li>
         </ul>
