@@ -8,9 +8,11 @@ export const dynamic = "force-dynamic";
 
 const APP_BUNDLE_ID = "app.rork.tyl7sdawrtvvc61p9zjd0";
 
+// Apple Developer チームID。Vercel に EXPO_PUBLIC_TEAM_ID があればそれを優先。
+const DEFAULT_TEAM_ID = "525PRK5N5U";
+
 export async function GET() {
-  // Apple Developer チームID（Vercel の環境変数）。未設定なら空文字。
-  const teamId = process.env.EXPO_PUBLIC_TEAM_ID ?? "";
+  const teamId = process.env.EXPO_PUBLIC_TEAM_ID || DEFAULT_TEAM_ID;
 
   const body = {
     applinks: {
