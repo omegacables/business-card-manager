@@ -176,10 +176,10 @@ Google / LINE / Apple（Sign in with Apple）ですぐに始められます。
 
 ## ✅ 審査に出す直前の「必須対応チェックリスト」
 
-- [ ] **【最重要・未実装】アカウント削除機能をアプリ内に追加する**
-  - Apple ガイドライン **5.1.1(v)**：アカウント作成を伴うアプリは、**アプリ内でアカウントを削除できる導線が必須**です。メール依頼だけでは却下されます。
-  - 現状、コード上にアカウント削除の実装が見当たりません。**このままでは却下される可能性が高い**です。
-  - 対応：バックエンドに削除API（Supabaseの auth ユーザー＋profiles＋business_cards＋関連データを削除）を用意し、アプリの設定画面に「アカウントを削除」ボタンを追加する。→ 指示いただければバックエンド側APIはすぐ用意します（アプリ側ボタンはRorkで追加）。
+- [x] **アカウント削除機能（Apple 5.1.1(v)）— 実装済み**
+  - バックエンド：`DELETE /api/account`（`POST` も可）。`Authorization: Bearer <token>` のユーザーの Supabase 認証ユーザー＋profiles＋business_cards＋subscriptions＋monthly_usage＋activities＋line_inbox＋名刺画像（Storage）を一括削除。成功時 `{ "success": true }`。
+  - アプリ：設定画面に「アカウント削除」ボタン設置済み（Rork）。→ ボタンが上記エンドポイントを叩く配線になっているか確認すること。
+  - 文面：プライバシーポリシー/サポートに「全データが削除され復元不可」と明記済み。
 - [ ] プライバシーポリシーURL / サポートURL が公開されている（→ 本対応で公開済み）
 - [ ] 実機で Google / LINE / Apple の3ログインが通ることを確認
 - [ ] Sign in with Apple が動作することを確認
